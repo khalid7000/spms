@@ -1,0 +1,17 @@
+package com.rit.spms.repository;
+
+import com.rit.spms.domain.RoleAssignment;
+import com.rit.spms.domain.enums.RoleType;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, Long> {
+    Optional<RoleAssignment> findByUserIdAndStrategyId(Long userId, Long strategyId);
+    List<RoleAssignment> findByStrategyId(Long strategyId);
+    boolean existsByStrategyIdAndRole(Long strategyId, RoleType role);
+    List<RoleAssignment> findByUserId(Long userId);
+}

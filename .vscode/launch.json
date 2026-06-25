@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Spring Boot-SpmsApplication<spms>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.rit.spms.SpmsApplication",
+            "projectName": "spms",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        }
+    ]
+}

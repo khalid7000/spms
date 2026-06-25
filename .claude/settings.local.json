@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/kxkcad/projects/demo/spms-client/src/layouts/**)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\kxkcad\\projects\\demo\\spms-client\\src\\api",
+      "c:\\Users\\kxkcad\\projects\\demo\\spms-client\\src\\pages\\member",
+      "c:\\Users\\kxkcad\\projects\\demo\\spms-client\\src\\layouts",
+      "c:\\Users\\kxkcad\\projects\\demo\\spms-client\\src"
+    ]
+  }
+}

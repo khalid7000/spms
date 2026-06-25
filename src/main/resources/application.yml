@@ -1,0 +1,60 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/spms
+    username: spms_user
+    password: spms_pass
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+app:
+  jwt:
+    secret: your-256-bit-secret-key-change-in-production-please-32chars
+    expiration-ms: 86400000
+
+server:
+  port: 8085
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# ─── LDAP Authentication ─────────────────────────────────────────────────────
+# Set ldap.enabled=true at deployment to switch from local BCrypt to LDAP auth.
+# No code changes required — only this file (or an env-specific override) needs
+# to be updated.
+ldap:
+  enabled: false
+
+  # LDAP server URL (required when enabled=true)
+  # url: ldap://ldap.rit.edu:389
+  # url: ldaps://ldap.rit.edu:636      # TLS variant
+
+  # Base DN for all operations (optional — narrows all searches)
+  # base: dc=rit,dc=edu
+
+  # ── Pattern-based auth (OpenLDAP / standard LDAP) ──────────────────────────
+  # Constructs the user DN directly: uid=user@rit.edu,ou=people,dc=rit,dc=edu
+  # user-dn-pattern: uid={0},ou=people
+
+  # ── Search-based auth (Active Directory / complex directory) ───────────────
+  # Searches for the user's DN using a filter, then binds.
+  # Leave user-search-filter blank to fall back to user-dn-pattern.
+  # user-search-filter: (sAMAccountName={0})   # AD username
+  # user-search-filter: (userPrincipalName={0}) # AD UPN / email
+  # user-search-base: ou=accounts               # relative to base, or blank
+
+  # ── Bind account (required for search-based auth; omit for anonymous bind) ─
+  # bind-dn: cn=svc-spms,ou=service-accounts,dc=rit,dc=edu
+  # bind-password: changeme
