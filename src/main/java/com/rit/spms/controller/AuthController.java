@@ -97,7 +97,7 @@ public class AuthController {
         if (appUserRepository.existsByEmail(request.getEmail())) {
             throw new BusinessRuleException("Email already registered");
         }
-        AppUser user = adminService.createUser(
+        var user = adminService.createUser(
                 request.getFname(), request.getLname(), request.getEmail(),
                 request.getTitle(), null, false, request.getPassword());
 

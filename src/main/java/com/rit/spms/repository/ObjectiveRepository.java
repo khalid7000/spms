@@ -11,6 +11,7 @@ import java.util.List;
 @Repository
 public interface ObjectiveRepository extends JpaRepository<Objective, Long> {
     List<Objective> findByGoalIdOrderBySortOrder(Long goalId);
+    boolean existsByGoalId(Long goalId);
 
     @Query("SELECT o FROM Objective o WHERE o.goal.strategy.id = :strategyId ORDER BY o.sortOrder")
     List<Objective> findByStrategyId(@Param("strategyId") Long strategyId);

@@ -15,8 +15,28 @@ public interface AchievementRepository extends JpaRepository<Achievement, Long> 
     @Query("SELECT a FROM Achievement a WHERE a.measurement.initiative.id = :initiativeId ORDER BY a.recordedAt DESC")
     List<Achievement> findByInitiativeId(@Param("initiativeId") Long initiativeId);
 
+    boolean existsByMeasurementInitiativeId(Long initiativeId);
+
+    long countByMeasurementInitiativeId(Long initiativeId);
+
     @Query("SELECT a FROM Achievement a WHERE a.measurement.initiative.id IN " +
            "(SELECT im.deptInitiative.id FROM InitiativeMapping im WHERE im.universityInitiative.id = :universityInitiativeId) " +
            "ORDER BY a.recordedAt DESC")
     List<Achievement> findAggregatedByUniversityInitiativeId(@Param("universityInitiativeId") Long universityInitiativeId);
+
+    @Query("SELECT COUNT(a) FROM Achievement a WHERE a.measurement.initiative.id IN " +
+           "(SELECT im.deptInitiative.id FROM InitiativeMapping im WHERE im.universityInitiative.id = :universityInitiativeId)")
+    long countAggregatedByUniversityInitiativeId(@Param("universityInitiativeId") Long universityInitiativeId);
+
+    @Query("SELECT COALESCE(a.assessmentPeriod.name, 'Unassigned'), " +
+           "a.measurement.initiative.objective.goal.strategy.department.name, COUNT(a) " +
+           "FROM Achievement a " +
+           "WHERE a.measurement.initiative.id IN " +
+           "(SELECT im.deptInitiative.id FROM InitiativeMapping im WHERE im.universityInitiative.id = :universityInitiativeId) " +
+           "GROUP BY COALESCE(a.assessmentPeriod.name, 'Unassigned'), " +
+           "a.measurement.initiative.objective.goal.strategy.department.name " +
+           "HAVING COUNT(a) > 0 " +
+           "ORDER BY COALESCE(a.assessmentPeriod.name, 'Unassigned'), " +
+           "a.measurement.initiative.objective.goal.strategy.department.name")
+    List<Object[]> countByPeriodAndDepartmentForUniversityInitiative(@Param("universityInitiativeId") Long universityInitiativeId);
 }

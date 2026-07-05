@@ -20,6 +20,7 @@ public class GoalService {
     private final StrategyRepository strategyRepository;
     private final AppUserRepository appUserRepository;
     private final ThemeRepository themeRepository;
+    private final VisionAreaRepository visionAreaRepository;
     private final PermissionService permissionService;
     private final AuditService auditService;
 
@@ -37,16 +38,21 @@ public class GoalService {
                     .orElseThrow(() -> new ResourceNotFoundException("Theme", req.getThemeId()));
         }
 
+        VisionArea area = null;
+        if (req.getVisionAreaId() != null) {
+            area = visionAreaRepository.findById(req.getVisionAreaId())
+                    .orElseThrow(() -> new ResourceNotFoundException("VisionArea", req.getVisionAreaId()));
+        }
+
         Goal goal = Goal.builder()
                 .strategy(strategy)
                 .theme(theme)
+                .area(area)
                 .title(req.getTitle())
                 .description(req.getDescription())
                 .sortOrder(req.getSortOrder() != null ? req.getSortOrder() : 0)
                 .createdBy(creator)
                 .build();
-        // areaId on create is intentionally not supported — owners assign goals to areas
-        // via the dedicated PATCH /goals/{id}/area endpoint after creation
         goal = goalRepository.save(goal);
 
         auditService.log(creator, "CREATE_GOAL", "Goal", goal.getId(), strategy,
@@ -70,6 +76,13 @@ public class GoalService {
             Theme theme = themeRepository.findById(req.getThemeId())
                     .orElseThrow(() -> new ResourceNotFoundException("Theme", req.getThemeId()));
             goal.setTheme(theme);
+        }
+        if (req.getVisionAreaId() != null) {
+            VisionArea area = visionAreaRepository.findById(req.getVisionAreaId())
+                    .orElseThrow(() -> new ResourceNotFoundException("VisionArea", req.getVisionAreaId()));
+            goal.setArea(area);
+        } else {
+            goal.setArea(null);
         }
         goal = goalRepository.save(goal);
 

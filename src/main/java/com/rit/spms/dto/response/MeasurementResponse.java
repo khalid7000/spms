@@ -16,6 +16,7 @@ public class MeasurementResponse {
     private BigDecimal targetValue;
     private BigDecimal actualValue;
     private Integer sortOrder;
+    private Long academicYearId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

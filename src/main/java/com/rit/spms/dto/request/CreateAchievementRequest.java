@@ -13,5 +13,6 @@ public class CreateAchievementRequest {
     private Long achievementTypeId;
 
     private String details;
+    private String privateNotes;
     private Long assessmentPeriodId;
 }

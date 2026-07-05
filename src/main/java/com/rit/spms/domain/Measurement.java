@@ -1,5 +1,6 @@
 package com.rit.spms.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -39,6 +40,16 @@ public class Measurement {
 
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
+
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "academic_year_id")
+    private AcademicYear academicYear;
+
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_measurement_id")
+    private Measurement sourceMeasurement;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

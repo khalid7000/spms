@@ -1,0 +1,57 @@
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.0)
+
+2026-07-05T02:53:39.598+04:00  INFO 48560 --- [           main] com.rit.spms.SpmsApplication             : Starting SpmsApplication using Java 21.0.8 with PID 48560 (C:\Users\kxkcad\projects\demo\spms\target\classes started by kxkcad in C:\Users\kxkcad\projects\demo\spms)
+2026-07-05T02:53:39.598+04:00  INFO 48560 --- [           main] com.rit.spms.SpmsApplication             : No active profile set, falling back to 1 default profile: "default"
+2026-07-05T02:53:40.374+04:00  INFO 48560 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-07-05T02:53:40.509+04:00  INFO 48560 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 116 ms. Found 33 JPA repository interfaces.
+2026-07-05T02:53:41.671+04:00  INFO 48560 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8085 (http)
+2026-07-05T02:53:41.685+04:00  INFO 48560 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-07-05T02:53:41.689+04:00  INFO 48560 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.24]
+2026-07-05T02:53:41.774+04:00  INFO 48560 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-07-05T02:53:41.774+04:00  INFO 48560 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 2112 ms
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+2026-07-05T02:53:42.041+04:00  INFO 48560 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-07-05T02:53:42.288+04:00  INFO 48560 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@3095d401
+2026-07-05T02:53:42.289+04:00  INFO 48560 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-07-05T02:53:42.322+04:00  INFO 48560 --- [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5432/spms (PostgreSQL 17.6)
+2026-07-05T02:53:42.333+04:00  WARN 48560 --- [           main] o.f.c.internal.database.base.Database    : Flyway upgrade recommended: PostgreSQL 17.6 is newer than this version of Flyway and support has not been tested. The latest supported version of PostgreSQL is 16.
+2026-07-05T02:53:42.438+04:00  INFO 48560 --- [           main] o.f.core.internal.command.DbValidate     : Successfully validated 33 migrations (execution time 00:00.095s)
+2026-07-05T02:53:42.457+04:00  INFO 48560 --- [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 32
+2026-07-05T02:53:42.483+04:00  INFO 48560 --- [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "33 - swot goal additions"
+2026-07-05T02:53:42.539+04:00  INFO 48560 --- [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 1 migration to schema "public", now at version v33 (execution time 00:00.040s)
+2026-07-05T02:53:42.648+04:00  INFO 48560 --- [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-07-05T02:53:42.763+04:00  INFO 48560 --- [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.5.2.Final
+2026-07-05T02:53:42.815+04:00  INFO 48560 --- [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-07-05T02:53:43.273+04:00  INFO 48560 --- [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-07-05T02:53:43.382+04:00  WARN 48560 --- [           main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-07-05T02:53:45.202+04:00  INFO 48560 --- [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-07-05T02:53:45.256+04:00  INFO 48560 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-07-05T02:53:45.603+04:00  INFO 48560 --- [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-07-05T02:53:47.116+04:00  INFO 48560 --- [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name hybridAuthenticationProvider
+2026-07-05T02:53:47.116+04:00  WARN 48560 --- [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used for username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider.
+2026-07-05T02:53:48.452+04:00  WARN 48560 --- [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-07-05T02:53:48.888+04:00  INFO 48560 --- [           main] o.s.s.web.DefaultSecurityFilterChain     : Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@12928712, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@f00b18a, org.springframework.security.web.context.SecurityContextHolderFilter@159fac74, org.springframework.security.web.header.HeaderWriterFilter@11cd86bd, org.springframework.web.filter.CorsFilter@3c92e802, org.springframework.security.web.authentication.logout.LogoutFilter@1a73b0f9, com.rit.spms.security.JwtAuthenticationFilter@611f82a8, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@29ff6e15, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@51d15a98, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@412077c9, org.springframework.security.web.session.SessionManagementFilter@1b1e93a9, org.springframework.security.web.access.ExceptionTranslationFilter@c541518, org.springframework.security.web.access.intercept.AuthorizationFilter@1c1023e1]
+2026-07-05T02:53:49.292+04:00  INFO 48560 --- [           main] o.s.l.c.support.AbstractContextSource    : Property 'userDn' not set - anonymous context will be used for read-only operations
+2026-07-05T02:53:49.382+04:00  INFO 48560 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8085 (http) with context path '/'
+2026-07-05T02:53:49.392+04:00  INFO 48560 --- [           main] com.rit.spms.SpmsApplication             : Started SpmsApplication in 10.321 seconds (process running for 10.784)
+2026-07-05T02:54:03.440+04:00  INFO 48560 --- [nio-8085-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-07-05T02:54:03.440+04:00  INFO 48560 --- [nio-8085-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-07-05T02:54:03.440+04:00  INFO 48560 --- [nio-8085-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
+2026-07-05T03:03:39.041+04:00  WARN 48560 --- [nio-8085-exec-6] c.r.s.exception.GlobalExceptionHandler   : Business rule violation: A final decision is required for area "Mitigate Threats and Leverage Opportunities"
+2026-07-05T03:03:50.920+04:00  WARN 48560 --- [nio-8085-exec-1] c.r.s.exception.GlobalExceptionHandler   : Business rule violation: A final decision is required for area "Mitigate Threats and Leverage Opportunities"
+2026-07-05T03:11:33.793+04:00  WARN 48560 --- [nio-8085-exec-2] c.r.s.exception.GlobalExceptionHandler   : Business rule violation: You must review every goal under "Capitalizing on Opportunities" before submitting (missing: Develop Online Education Programs)
+2026-07-05T03:19:46.284+04:00  WARN 48560 --- [io-8085-exec-10] c.r.s.exception.GlobalExceptionHandler   : Business rule violation: A final decision is required for area "Mitigate Threats and Leverage Opportunities"
+2026-07-05T03:27:46.739+04:00  WARN 48560 --- [nio-8085-exec-5] c.r.s.exception.GlobalExceptionHandler   : Business rule violation: A final decision is required for goal "Enhance Communication and Stakeholder Engagement"
+2026-07-05T03:29:51.810+04:00  WARN 48560 --- [nio-8085-exec-8] c.r.s.exception.GlobalExceptionHandler   : Business rule violation: A final decision is required for area "Mitigate Threats and Leverage Opportunities"
+2026-07-05T03:33:43.142+04:00  WARN 48560 --- [nio-8085-exec-1] PageModule$PlainPageSerializationWarning : Serializing PageImpl instances as-is is not supported, meaning that there is no guarantee about the stability of the resulting JSON structure!
+	For a stable JSON structure, please use Spring Data's PagedModel (globally via @EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO))
+	or Spring HATEOAS and Spring Data's PagedResourcesAssembler as documented in https://docs.spring.io/spring-data/commons/reference/repositories/core-extensions.html#core.web.pageables.
+

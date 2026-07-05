@@ -23,6 +23,8 @@ public class StrategyResponse {
     private Integer achievementThreshold;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private boolean hasGoals;
     private List<VisionAreaResponse> areas;
     private List<GoalResponse> goals;
+    private List<AssessmentPeriodResponse> assessmentPeriods;
 }

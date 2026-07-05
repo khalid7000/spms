@@ -16,6 +16,7 @@ public class ObjectiveResponse {
     private Integer sortOrder;
     private Boolean frozen;
     private List<Long> universityObjectiveIds;
+    private List<String> universityObjectiveTitles;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<InitiativeResponse> initiatives;

@@ -23,9 +23,10 @@ public class InitiativeController {
     @GetMapping("/api/objectives/{objectiveId}/initiatives")
     public ResponseEntity<ApiResponse<List<InitiativeResponse>>> getInitiatives(
             @PathVariable Long objectiveId,
+            @RequestParam(required = false) Long academicYearId,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                initiativeService.getInitiatives(objectiveId, principal.getId())));
+                initiativeService.getInitiatives(objectiveId, academicYearId, principal.getId())));
     }
 
     @PostMapping("/api/objectives/{objectiveId}/initiatives")

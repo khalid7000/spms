@@ -1,13 +1,38 @@
 {
   "permissions": {
     "allow": [
-      "Read(//c/Users/kxkcad/projects/demo/spms-client/src/layouts/**)"
+      "Read(//c/Users/kxkcad/projects/demo/spms-client/src/layouts/**)",
+      "Read(//c/Users/kxkcad/projects/demo/spms-client/**)",
+      "Bash(grep -i \"strateg.*sheet\\\\|sheet.*migrat\\\\|migrate.*strateg\\\\|current.*strateg.*sql\\\\|sql.*current.*strateg\" \"C:/Users/kxkcad/.claude/projects/c--Users-kxkcad-projects-demo-spms/91e9a2fe-7432-471f-a43e-9a6d2f1b8f73.jsonl\" 2>/dev/null | grep '\"role\":\"user\"' | head -10)",
+      "Read(//c/Users/kxkcad/.claude/projects/c--Users-kxkcad-projects-demo-spms/**)",
+      "Bash(Test-Path \"C:\\\\Users\\\\kxkcad\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-kxkcad-projects-demo-spms\\\\91e9a2fe-7432-471f-a43e-9a6d2f1b8f73\\\\scratchpad\\\\univ_data.txt\")",
+      "Read(//c/Users/kxkcad/.claude/**)",
+      "Bash(PGPASSWORD=spms_pass psql -h localhost -U spms_user -d spms -c \"SELECT version, description, installed_on, success FROM flyway_schema_history ORDER BY installed_rank;\")",
+      "PowerShell($env:PGPASSWORD = \"spms_pass\"; & \"C:\\\\Program Files\\\\PostgreSQL\\\\17\\\\bin\\\\psql.exe\" -h localhost -U spms_user -d spms -c \"SELECT version, description, installed_on, success FROM flyway_schema_history ORDER BY installed_rank;\")",
+      "PowerShell($env:PGPASSWORD = \"spms_pass\"; & \"C:\\\\Program Files\\\\PostgreSQL\\\\17\\\\bin\\\\psql.exe\" -h localhost -U spms_user -d spms -c \"DELETE FROM flyway_schema_history WHERE version = '7';\")",
+      "PowerShell(Get-Command mvn -ErrorAction SilentlyContinue; \\(Get-ChildItem \"C:\\\\Program Files\\\\Maven\" -Recurse -Filter \"mvn.cmd\" -ErrorAction SilentlyContinue | Select -First 1\\).FullName; \\(Get-ChildItem \"$env:USERPROFILE\\\\.m2\\\\wrapper\" -Recurse -Filter \"mvn.cmd\" -ErrorAction SilentlyContinue | Select -First 1\\).FullName)",
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\.m2\" -Recurse -Filter \"mvn.cmd\" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName)",
+      "Read(//c//**)",
+      "PowerShell(cmd /c \"cd /d c:\\\\Users\\\\kxkcad\\\\projects\\\\demo\\\\spms && mvnw.cmd spring-boot:run\" 2>&1)",
+      "PowerShell(cmd /c \"c:\\\\Users\\\\kxkcad\\\\projects\\\\demo\\\\spms\\\\mvnw.cmd -f c:\\\\Users\\\\kxkcad\\\\projects\\\\demo\\\\spms\\\\pom.xml spring-boot:run\" 2>&1)",
+      "PowerShell(Get-ChildItem \"$env:LOCALAPPDATA\\\\JetBrains\" -Recurse -Filter \"mvn.cmd\" -ErrorAction SilentlyContinue -Depth 8 | Select-Object -First 3 FullName)",
+      "PowerShell($env:PGPASSWORD = \"spms_pass\"; & \"C:\\\\Program Files\\\\PostgreSQL\\\\17\\\\bin\\\\psql.exe\" -h localhost -U spms_user -d spms -c \"SELECT id, email, must_change_password FROM app_user ORDER BY id LIMIT 10;\" 2>&1)",
+      "PowerShell(Get-Process -Name java -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Force)",
+      "Read(//g/My Drive/RIT/7.Education Technology Accelerator Funding/2026-Strategic Plan Management System/**)",
+      "Bash(powershell -NonInteractive -Command ' *)",
+      "PowerShell(Get-Process -Name java -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -eq '' } | ForEach-Object { \"Killing PID $\\($_.Id\\)\"; $_.Kill\\(\\) }; Start-Sleep -Seconds 2; \"Done\")",
+      "PowerShell(& \"C:\\\\Users\\\\kxkcad\\\\.m2\\\\wrapper\\\\dists\\\\apache-maven-3.9.9\\\\bin\\\\mvn.cmd\" -f \"c:\\\\Users\\\\kxkcad\\\\projects\\\\demo\\\\spms\\\\pom.xml\" clean package -DskipTests -q 2>&1)",
+      "PowerShell(if \\($LASTEXITCODE -eq 0\\) { \"BUILD OK\" } else { \"BUILD FAILED\" })",
+      "PowerShell(Start-Process java -ArgumentList \"-jar\",\"target\\\\spms-1.0.0.jar\",\"--server.port=8085\" -RedirectStandardOutput \"spms_out.log\" -RedirectStandardError \"spms_err.log\" -WorkingDirectory \"c:\\\\Users\\\\kxkcad\\\\projects\\\\demo\\\\spms\")",
+      "PowerShell(\"Started\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\kxkcad\\projects\\demo\\spms-client\\src\\api",
       "c:\\Users\\kxkcad\\projects\\demo\\spms-client\\src\\pages\\member",
       "c:\\Users\\kxkcad\\projects\\demo\\spms-client\\src\\layouts",
-      "c:\\Users\\kxkcad\\projects\\demo\\spms-client\\src"
+      "c:\\Users\\kxkcad\\projects\\demo\\spms-client\\src",
+      "C:\\Users\\kxkcad\\.claude"
     ]
   }
 }

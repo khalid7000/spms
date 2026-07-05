@@ -2,6 +2,7 @@ package com.rit.spms.controller;
 
 import com.rit.spms.domain.*;
 import com.rit.spms.domain.enums.StrategyState;
+import com.rit.spms.domain.enums.StrategyType;
 import com.rit.spms.dto.request.RoleAssignmentRequest;
 import com.rit.spms.dto.response.*;
 
@@ -142,17 +143,26 @@ public class AdminController {
 
     @PostMapping("/planning-cycles")
     public ResponseEntity<ApiResponse<PlanningCycle>> createPlanningCycle(
-            @Valid @RequestBody PlanningCycleRequest req) {
-        PlanningCycle cycle = adminService.createPlanningCycle(req.getName(), req.getStartYear(), req.getEndYear());
+            @Valid @RequestBody PlanningCycleRequest req,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        PlanningCycle cycle = adminService.createPlanningCycle(
+                req.getName(), req.getStartYear(), req.getEndYear(),
+                req.getOwnerId(), principal.getId());
         return ResponseEntity.status(201).body(ApiResponse.success("Planning cycle created", cycle));
     }
 
     @PutMapping("/planning-cycles/{id}")
-    public ResponseEntity<ApiResponse<PlanningCycle>> updatePlanningCycle(@PathVariable Long id,
-                                                                            @Valid @RequestBody PlanningCycleUpdateRequest req) {
-        PlanningCycle cycle = adminService.updatePlanningCycle(id, req.getName(), req.getStartYear(),
+    public ResponseEntity<ApiResponse<Void>> updatePlanningCycle(@PathVariable Long id,
+                                                                   @Valid @RequestBody PlanningCycleUpdateRequest req) {
+        adminService.updatePlanningCycle(id, req.getName(), req.getStartYear(),
                 req.getEndYear(), Boolean.TRUE.equals(req.getActive()));
-        return ResponseEntity.ok(ApiResponse.success(cycle));
+        return ResponseEntity.ok(ApiResponse.success("Planning cycle updated", null));
+    }
+
+    @DeleteMapping("/planning-cycles/{id}")
+    public ResponseEntity<ApiResponse<Void>> deletePlanningCycle(@PathVariable Long id) {
+        adminService.deletePlanningCycle(id);
+        return ResponseEntity.ok(ApiResponse.success("Planning cycle deleted", null));
     }
 
     // --- Assessment Periods ---
@@ -204,6 +214,25 @@ public class AdminController {
     }
 
     // --- Strategies (admin view) ---
+
+    @DeleteMapping("/strategies/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteStrategy(@PathVariable Long id) {
+        adminService.deleteStrategy(id);
+        return ResponseEntity.ok(ApiResponse.success("Strategy deleted", null));
+    }
+
+    @PostMapping("/strategies/university")
+    public ResponseEntity<ApiResponse<StrategyResponse>> createUniversityStrategy(
+            @Valid @RequestBody UniversityStrategyRequest req,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        StrategyType sType = "UNIVERSITY".equalsIgnoreCase(req.getType())
+                ? StrategyType.UNIVERSITY : StrategyType.UNIT;
+        Strategy strategy = adminService.createUniversityStrategy(
+                req.getPlanningCycleId(), req.getTitle(), req.getDescription(),
+                req.getOwnerId(), sType, principal.getId());
+        return ResponseEntity.status(201).body(ApiResponse.success("University strategy created",
+                strategyService.buildStrategyResponse(strategy, false)));
+    }
 
     @GetMapping("/strategies")
     public ResponseEntity<ApiResponse<List<StrategyResponse>>> getAllStrategies() {
@@ -271,11 +300,19 @@ public class AdminController {
 
     @PostMapping("/strategies/{strategyId}/assign-role")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<RoleAssignment>> assignRole(@PathVariable Long strategyId,
-                                                                   @Valid @RequestBody RoleAssignmentRequest req,
-                                                                   @AuthenticationPrincipal UserPrincipal principal) {
+    public ResponseEntity<ApiResponse<RoleAssignmentResponse>> assignRole(@PathVariable Long strategyId,
+                                                                           @Valid @RequestBody RoleAssignmentRequest req,
+                                                                           @AuthenticationPrincipal UserPrincipal principal) {
         RoleAssignment ra = strategyService.assignRole(strategyId, req, principal.getId());
-        return ResponseEntity.ok(ApiResponse.success("Role assigned", ra));
+        return ResponseEntity.ok(ApiResponse.success("Role assigned", RoleAssignmentResponse.builder()
+                .id(ra.getId())
+                .strategyId(ra.getStrategy().getId())
+                .strategyTitle(ra.getStrategy().getTitle())
+                .userId(ra.getUser().getId())
+                .userEmail(ra.getUser().getEmail())
+                .userName(ra.getUser().getFname() + " " + ra.getUser().getLname())
+                .role(ra.getRole())
+                .build()));
     }
 
     // --- Reference data (accessible by all authenticated users) ---
@@ -292,14 +329,20 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success(adminService.getAllPlanningCycles()));
     }
 
+    @GetMapping("/planning-cycles/{cycleId}/periods/all")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<AssessmentPeriod>>> getPeriodsPublic(@PathVariable Long cycleId) {
+        return ResponseEntity.ok(ApiResponse.success(adminService.getPeriodsForCycle(cycleId)));
+    }
+
     // --- Audit Logs ---
 
     @GetMapping("/audit-logs")
-    public ResponseEntity<ApiResponse<Page<AuditLog>>> getAuditLogs(
+    public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> getAuditLogs(
             @RequestParam(required = false) Long strategyId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
-        Page<AuditLog> logs = adminService.getAuditLogs(strategyId,
+        Page<AuditLogResponse> logs = adminService.getAuditLogs(strategyId,
                 PageRequest.of(page, size, Sort.by("createdAt").descending()));
         return ResponseEntity.ok(ApiResponse.success(logs));
     }
@@ -343,6 +386,7 @@ public class AdminController {
         @NotBlank private String name;
         @NotNull private Integer startYear;
         @NotNull private Integer endYear;
+        @NotNull private Long ownerId;
     }
 
     @Data public static class PlanningCycleUpdateRequest {
@@ -370,5 +414,13 @@ public class AdminController {
 
     @Data public static class AdminStateRequest {
         @NotNull private StrategyState state;
+    }
+
+    @Data public static class UniversityStrategyRequest {
+        @NotNull private Long planningCycleId;
+        @NotBlank private String title;
+        private String description;
+        @NotNull private Long ownerId;
+        private String type; // "UNIVERSITY" (main aggregator) or "UNIT" (sub-unit); defaults to UNIT
     }
 }

@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface ThemeRepository extends JpaRepository<Theme, Long> {
     List<Theme> findByPlanningCycleIdOrderBySortOrder(Long planningCycleId);
+    void deleteByPlanningCycleId(Long planningCycleId);
 }

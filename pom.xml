@@ -135,6 +135,25 @@
             <artifactId>spring-security-ldap</artifactId>
         </dependency>
 
+        <!-- Anthropic Claude API (optional AI provider for SWOT area/goal generation) -->
+        <dependency>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>2.34.0</version>
+        </dependency>
+
+        <!-- extJWNL + bundled WordNet 3.1 data (SWOT synonym suggestions — fully offline, no AI call) -->
+        <dependency>
+            <groupId>net.sf.extjwnl</groupId>
+            <artifactId>extjwnl</artifactId>
+            <version>2.0.5</version>
+        </dependency>
+        <dependency>
+            <groupId>net.sf.extjwnl</groupId>
+            <artifactId>extjwnl-data-wn31</artifactId>
+            <version>1.2</version>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

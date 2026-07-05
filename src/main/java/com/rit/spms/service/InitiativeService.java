@@ -27,6 +27,9 @@ public class InitiativeService {
     private final InitiativeMappingRepository initiativeMappingRepository;
     private final ObjectiveMappingRepository objectiveMappingRepository;
     private final MeasurementRepository measurementRepository;
+    private final AchievementRepository achievementRepository;
+    private final AcademicYearRepository academicYearRepository;
+    private final AssessmentPeriodRepository assessmentPeriodRepository;
     private final PermissionService permissionService;
     private final AuditService auditService;
 
@@ -45,9 +48,19 @@ public class InitiativeService {
             throw new UnauthorizedException("Only the Owner can add initiatives to a frozen objective");
         }
 
-        boolean isDeptStrategy = strategy.getStrategyType() == StrategyType.DEPARTMENT;
+        // Resolve academic year (null = base initiative)
+        AcademicYear academicYear = null;
+        if (req.getAcademicYearId() != null) {
+            academicYear = academicYearRepository.findById(req.getAcademicYearId())
+                    .orElseThrow(() -> new ResourceNotFoundException("AcademicYear", req.getAcademicYearId()));
+            if (academicYear.getClosed()) {
+                throw new BusinessRuleException("Cannot add initiatives to a closed academic year");
+            }
+        }
 
-        if (isDeptStrategy) {
+        boolean isDeptStrategy = strategy.getStrategyType() != StrategyType.UNIVERSITY;
+
+        if (isDeptStrategy && academicYear == null) {
             long mappingCount = objectiveMappingRepository.countByDeptObjectiveId(objectiveId);
             if (mappingCount == 0) {
                 throw new BusinessRuleException(
@@ -59,6 +72,12 @@ public class InitiativeService {
             validateUniversityInitiativeForObjective(objectiveId, req.getUniversityInitiativeId());
         }
 
+        AssessmentPeriod assessmentPeriod = null;
+        if (req.getAssessmentPeriodId() != null) {
+            assessmentPeriod = assessmentPeriodRepository.findById(req.getAssessmentPeriodId())
+                    .orElseThrow(() -> new ResourceNotFoundException("AssessmentPeriod", req.getAssessmentPeriodId()));
+        }
+
         AppUser creator = appUserRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
 
@@ -68,10 +87,12 @@ public class InitiativeService {
                 .description(req.getDescription())
                 .sortOrder(req.getSortOrder() != null ? req.getSortOrder() : 0)
                 .createdBy(creator)
+                .academicYear(academicYear)
+                .assessmentPeriod(assessmentPeriod)
                 .build();
         initiative = initiativeRepository.save(initiative);
 
-        if (isDeptStrategy && req.getUniversityInitiativeId() != null) {
+        if (isDeptStrategy && academicYear == null && req.getUniversityInitiativeId() != null) {
             Initiative univInit = initiativeRepository.findById(req.getUniversityInitiativeId())
                     .orElseThrow(() -> new ResourceNotFoundException("University Initiative", req.getUniversityInitiativeId()));
             InitiativeMapping mapping = InitiativeMapping.builder()
@@ -94,6 +115,16 @@ public class InitiativeService {
         Long strategyId = strategy.getId();
         StrategyState state = strategy.getState();
 
+        // Check frozen-by-achievement: once achievements exist the initiative is locked
+        if (achievementRepository.existsByMeasurementInitiativeId(initiativeId)) {
+            throw new BusinessRuleException("This initiative has recorded achievements and cannot be edited");
+        }
+
+        // Check academic year not closed
+        if (initiative.getAcademicYear() != null && initiative.getAcademicYear().getClosed()) {
+            throw new BusinessRuleException("Cannot edit initiatives in a closed academic year");
+        }
+
         if (state == StrategyState.DEPLOYED || state == StrategyState.FROZEN) {
             if (!permissionService.isOwner(currentUserId, strategyId)) {
                 throw new UnauthorizedException("Plan content cannot be edited in " + state + " state");
@@ -115,6 +146,11 @@ public class InitiativeService {
         initiative.setTitle(req.getTitle());
         if (req.getDescription() != null) initiative.setDescription(req.getDescription());
         if (req.getSortOrder() != null) initiative.setSortOrder(req.getSortOrder());
+        if (req.getAssessmentPeriodId() != null) {
+            AssessmentPeriod period = assessmentPeriodRepository.findById(req.getAssessmentPeriodId())
+                    .orElseThrow(() -> new ResourceNotFoundException("AssessmentPeriod", req.getAssessmentPeriodId()));
+            initiative.setAssessmentPeriod(period);
+        }
         initiative = initiativeRepository.save(initiative);
 
         auditService.log(user, "UPDATE_INITIATIVE", "Initiative", initiativeId, strategy,
@@ -128,6 +164,16 @@ public class InitiativeService {
 
         Strategy strategy = initiative.getObjective().getGoal().getStrategy();
         Long strategyId = strategy.getId();
+
+        // Cannot delete if achievements exist
+        if (achievementRepository.existsByMeasurementInitiativeId(initiativeId)) {
+            throw new BusinessRuleException("This initiative has recorded achievements and cannot be deleted");
+        }
+
+        // Cannot delete in closed academic year
+        if (initiative.getAcademicYear() != null && initiative.getAcademicYear().getClosed()) {
+            throw new BusinessRuleException("Cannot delete initiatives in a closed academic year");
+        }
 
         if (strategy.getState() == StrategyState.REVIEW) {
             throw new BusinessRuleException("Initiatives cannot be deleted in REVIEW state");
@@ -148,19 +194,27 @@ public class InitiativeService {
     }
 
     @Transactional(readOnly = true)
-    public List<InitiativeResponse> getInitiatives(Long objectiveId, Long currentUserId) {
+    public List<InitiativeResponse> getInitiatives(Long objectiveId, Long academicYearId, Long currentUserId) {
         Objective objective = objectiveRepository.findById(objectiveId)
                 .orElseThrow(() -> new ResourceNotFoundException("Objective", objectiveId));
         permissionService.assertCanRead(currentUserId, objective.getGoal().getStrategy().getId());
 
-        return initiativeRepository.findByObjectiveIdOrderBySortOrder(objectiveId)
-                .stream().map(this::toResponse).toList();
+        List<Initiative> initiatives = (academicYearId != null)
+                ? initiativeRepository.findByObjectiveIdAndAcademicYearIdOrderBySortOrder(objectiveId, academicYearId)
+                : initiativeRepository.findByObjectiveIdAndAcademicYearIsNullOrderBySortOrder(objectiveId);
+
+        return initiatives.stream().map(this::toResponse).toList();
     }
 
     public InitiativeResponse toResponse(Initiative initiative) {
-        Long univInitId = initiativeMappingRepository.findByDeptInitiativeId(initiative.getId())
-                .map(im -> im.getUniversityInitiative().getId())
+        Initiative univInit = initiativeMappingRepository.findByDeptInitiativeId(initiative.getId())
+                .map(im -> im.getUniversityInitiative())
                 .orElse(null);
+        Long univInitId = univInit != null ? univInit.getId() : null;
+        String univInitTitle = univInit != null ? univInit.getTitle() : null;
+
+        long achievementCount = achievementRepository.countByMeasurementInitiativeId(initiative.getId());
+        boolean hasAchievements = achievementCount > 0;
 
         List<MeasurementResponse> measurements = measurementRepository
                 .findByInitiativeIdOrderBySortOrder(initiative.getId())
@@ -172,6 +226,7 @@ public class InitiativeService {
                         .targetValue(m.getTargetValue())
                         .actualValue(m.getActualValue())
                         .sortOrder(m.getSortOrder())
+                        .academicYearId(m.getAcademicYear() != null ? m.getAcademicYear().getId() : null)
                         .createdAt(m.getCreatedAt())
                         .updatedAt(m.getUpdatedAt())
                         .build()).toList();
@@ -183,6 +238,12 @@ public class InitiativeService {
                 .description(initiative.getDescription())
                 .sortOrder(initiative.getSortOrder())
                 .universityInitiativeId(univInitId)
+                .universityInitiativeTitle(univInitTitle)
+                .academicYearId(initiative.getAcademicYear() != null ? initiative.getAcademicYear().getId() : null)
+                .assessmentPeriodId(initiative.getAssessmentPeriod() != null ? initiative.getAssessmentPeriod().getId() : null)
+                .assessmentPeriodName(initiative.getAssessmentPeriod() != null ? initiative.getAssessmentPeriod().getName() : null)
+                .hasAchievements(hasAchievements)
+                .achievementCount(achievementCount)
                 .createdAt(initiative.getCreatedAt())
                 .updatedAt(initiative.getUpdatedAt())
                 .measurements(measurements)

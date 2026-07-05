@@ -4,7 +4,6 @@ import com.rit.spms.domain.*;
 import com.rit.spms.domain.enums.StrategyType;
 import com.rit.spms.dto.request.CreateObjectiveRequest;
 import com.rit.spms.dto.response.ObjectiveResponse;
-import com.rit.spms.exception.BusinessRuleException;
 import com.rit.spms.exception.ResourceNotFoundException;
 import com.rit.spms.exception.UnauthorizedException;
 import com.rit.spms.repository.*;
@@ -35,11 +34,7 @@ public class ObjectiveService {
         permissionService.assertCanEditContent(currentUserId, strategyId);
 
         Strategy strategy = goal.getStrategy();
-        boolean isDeptStrategy = strategy.getStrategyType() == StrategyType.DEPARTMENT;
-
-        if (isDeptStrategy && (req.getUniversityObjectiveIds() == null || req.getUniversityObjectiveIds().isEmpty())) {
-            throw new BusinessRuleException("Department objectives must map to at least one university objective");
-        }
+        boolean isDeptStrategy = strategy.getStrategyType() != StrategyType.UNIVERSITY;
 
         AppUser creator = appUserRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));

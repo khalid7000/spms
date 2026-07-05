@@ -34,6 +34,9 @@ public class Achievement {
     @Column(columnDefinition = "TEXT")
     private String details;
 
+    @Column(name = "private_notes", columnDefinition = "TEXT")
+    private String privateNotes;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "author_id", nullable = false)
     private AppUser author;

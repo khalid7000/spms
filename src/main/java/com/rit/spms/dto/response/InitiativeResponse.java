@@ -15,6 +15,14 @@ public class InitiativeResponse {
     private String description;
     private Integer sortOrder;
     private Long universityInitiativeId;
+    private String universityInitiativeTitle;
+    private long mappedAchievementCount;
+    private List<DepartmentAchievementSummary> departmentBreakdown;
+    private Long academicYearId;
+    private Long assessmentPeriodId;
+    private String assessmentPeriodName;
+    private boolean hasAchievements;
+    private long achievementCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<MeasurementResponse> measurements;

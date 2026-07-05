@@ -20,6 +20,25 @@ app:
   jwt:
     secret: your-256-bit-secret-key-change-in-production-please-32chars
     expiration-ms: 86400000
+  # SWOT collaborative workflow: ranked-choice voting weights and word-count
+  # gates for the SWOT-to-draft-strategy module. Tune here rather than in code.
+  swot:
+    min-words-per-quadrant: 3
+    max-words-per-quadrant: 15
+    vote-rank-count: 3
+    vote-rank-weights: [3, 2, 1]
+    top-words-per-quadrant-for-ai: 5
+    synonym-suggestion-count: 6
+  # AI provider for SWOT area/goal generation (SwotAreaGoalGenerator). Synonym
+  # suggestions are separate — always local WordNet, no AI/network involved.
+  # "ollama" (default): free, self-hosted — run `ollama pull llama3.1` and
+  #   `ollama serve` first; see app.ai.ollama below.
+  # "claude": requires ANTHROPIC_API_KEY in the process environment.
+  ai:
+    provider: ollama
+    ollama:
+      base-url: http://localhost:11434
+      model: llama3.1
 
 server:
   port: 8085
@@ -58,3 +77,8 @@ ldap:
   # ── Bind account (required for search-based auth; omit for anonymous bind) ─
   # bind-dn: cn=svc-spms,ou=service-accounts,dc=rit,dc=edu
   # bind-password: changeme
+
+# ─── Claude API (Anthropic) ──────────────────────────────────────────────────
+# Only needed if app.ai.provider=claude above. Requires ANTHROPIC_API_KEY to be
+# set in the process environment at deploy time (never commit a key here or to
+# git). Not used at all under the default "ollama" provider.

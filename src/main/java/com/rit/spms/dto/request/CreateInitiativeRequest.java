@@ -11,4 +11,6 @@ public class CreateInitiativeRequest {
     private String description;
     private Integer sortOrder = 0;
     private Long universityInitiativeId;
+    private Long academicYearId;
+    private Long assessmentPeriodId;
 }

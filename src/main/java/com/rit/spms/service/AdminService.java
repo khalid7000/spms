@@ -1,6 +1,10 @@
 package com.rit.spms.service;
 
 import com.rit.spms.domain.*;
+import com.rit.spms.domain.enums.RoleType;
+import com.rit.spms.domain.enums.StrategyState;
+import com.rit.spms.domain.enums.StrategyType;
+import com.rit.spms.dto.response.AuditLogResponse;
 import com.rit.spms.dto.response.UserResponse;
 import com.rit.spms.exception.BusinessRuleException;
 import com.rit.spms.exception.ResourceNotFoundException;
@@ -29,7 +33,10 @@ public class AdminService {
     private final StrategyRepository strategyRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final OrgGroupRepository orgGroupRepository;
+    private final GoalRepository goalRepository;
+    private final ThemeRepository themeRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService auditService;
 
     // --- Org Groups ---
 
@@ -193,19 +200,39 @@ public class AdminService {
 
     // --- Planning Cycles ---
 
-    public PlanningCycle createPlanningCycle(String name, int startYear, int endYear) {
-        return planningCycleRepository.save(
+    public PlanningCycle createPlanningCycle(String name, int startYear, int endYear,
+                                              Long ownerId, Long adminUserId) {
+        PlanningCycle cycle = planningCycleRepository.save(
                 PlanningCycle.builder().name(name).startYear(startYear).endYear(endYear).active(false).build());
+
+        String strategyTitle = name + " Strategic Plan";
+        String strategyDescription = "Main university strategic plan for the " + name
+                + " planning cycle (" + startYear + "–" + endYear + ").";
+        createUniversityStrategy(cycle.getId(), strategyTitle, strategyDescription,
+                ownerId, StrategyType.UNIVERSITY, adminUserId);
+
+        return cycle;
     }
 
-    public PlanningCycle updatePlanningCycle(Long id, String name, int startYear, int endYear, boolean active) {
+    public void updatePlanningCycle(Long id, String name, int startYear, int endYear, boolean active) {
         PlanningCycle cycle = planningCycleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PlanningCycle", id));
         cycle.setName(name);
         cycle.setStartYear(startYear);
         cycle.setEndYear(endYear);
         cycle.setActive(active);
-        return planningCycleRepository.save(cycle);
+        planningCycleRepository.save(cycle);
+    }
+
+    public void deletePlanningCycle(Long id) {
+        PlanningCycle cycle = planningCycleRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("PlanningCycle", id));
+        if (strategyRepository.existsByPlanningCycleId(id)) {
+            throw new BusinessRuleException("Cannot delete a planning cycle that has strategies. Delete all strategies first.");
+        }
+        themeRepository.deleteByPlanningCycleId(id);
+        assessmentPeriodRepository.deleteByPlanningCycleId(id);
+        planningCycleRepository.delete(cycle);
     }
 
     @Transactional(readOnly = true)
@@ -275,14 +302,65 @@ public class AdminService {
     // --- Audit Logs ---
 
     @Transactional(readOnly = true)
-    public Page<AuditLog> getAuditLogs(Long strategyId, Pageable pageable) {
+    public Page<AuditLogResponse> getAuditLogs(Long strategyId, Pageable pageable) {
         if (strategyId != null) {
-            return auditLogRepository.findByStrategyIdOrderByCreatedAtDesc(strategyId, pageable);
+            return auditLogRepository.findByStrategyIdOrderByCreatedAtDesc(strategyId, pageable)
+                    .map(AuditLogResponse::from);
         }
-        return auditLogRepository.findAllByOrderByCreatedAtDesc(pageable);
+        return auditLogRepository.findAllByOrderByCreatedAtDesc(pageable)
+                .map(AuditLogResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AuditLogResponse> getStrategyAuditLog(Long strategyId, Pageable pageable) {
+        return auditLogRepository.findByStrategyIdOrderByCreatedAtDesc(strategyId, pageable)
+                .map(AuditLogResponse::from);
     }
 
     // --- Strategies (admin view, no permission filter) ---
+
+    public Strategy createUniversityStrategy(Long planningCycleId, String title, String description,
+                                              Long ownerId, StrategyType type, Long adminUserId) {
+        PlanningCycle cycle = planningCycleRepository.findById(planningCycleId)
+                .orElseThrow(() -> new ResourceNotFoundException("PlanningCycle", planningCycleId));
+
+        if (type == StrategyType.UNIVERSITY &&
+                strategyRepository.findByPlanningCycleIdAndDepartmentIsNullAndStrategyType(
+                        planningCycleId, StrategyType.UNIVERSITY).isPresent()) {
+            throw new BusinessRuleException("A main university strategy already exists for this planning cycle");
+        }
+
+        Strategy strategy = Strategy.builder()
+                .planningCycle(cycle)
+                .strategyType(type)
+                .state(StrategyState.CREATION)
+                .title(title)
+                .description(description)
+                .build();
+        strategy = strategyRepository.save(strategy);
+
+        AppUser owner = appUserRepository.findById(ownerId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", ownerId));
+        roleAssignmentRepository.save(RoleAssignment.builder()
+                .user(owner).strategy(strategy).role(RoleType.OWNER).build());
+
+        AppUser admin = appUserRepository.findById(adminUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", adminUserId));
+        auditService.log(admin, "CREATE_STRATEGY", "Strategy", strategy.getId(), strategy,
+                "Admin created university strategy: " + title + " — assigned owner: " + owner.getEmail());
+        return strategy;
+    }
+
+    public void deleteStrategy(Long id) {
+        Strategy strategy = strategyRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Strategy", id));
+        if (goalRepository.existsByStrategyId(id)) {
+            throw new BusinessRuleException("Cannot delete a strategy that has goals. Remove all goals first.");
+        }
+        auditLogRepository.clearStrategyReferences(id);
+        roleAssignmentRepository.deleteByStrategyId(id);
+        strategyRepository.delete(strategy);
+    }
 
     @Transactional(readOnly = true)
     public List<Strategy> getAllStrategies() {

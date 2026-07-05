@@ -5,9 +5,7 @@ import com.rit.spms.domain.AuditLog;
 import com.rit.spms.domain.Strategy;
 import com.rit.spms.repository.AuditLogRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -16,7 +14,7 @@ public class AuditService {
 
     private final AuditLogRepository auditLogRepository;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void log(AppUser user, String action, String entityType, Long entityId,
                     Strategy strategy, String oldValue, String newValue, String details) {
         AuditLog log = AuditLog.builder()
@@ -32,7 +30,7 @@ public class AuditService {
         auditLogRepository.save(log);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void log(AppUser user, String action, String entityType, Long entityId, Strategy strategy, String details) {
         log(user, action, entityType, entityId, strategy, null, null, details);
     }

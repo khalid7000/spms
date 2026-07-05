@@ -11,6 +11,7 @@ import java.util.List;
 @Repository
 public interface MeasurementRepository extends JpaRepository<Measurement, Long> {
     List<Measurement> findByInitiativeIdOrderBySortOrder(Long initiativeId);
+    boolean existsByInitiativeId(Long initiativeId);
 
     @Query("SELECT m FROM Measurement m WHERE m.initiative.objective.goal.strategy.id = :strategyId ORDER BY m.sortOrder")
     List<Measurement> findByStrategyId(@Param("strategyId") Long strategyId);

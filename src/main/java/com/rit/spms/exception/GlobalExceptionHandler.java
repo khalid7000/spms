@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestControllerAdvice
@@ -30,6 +31,22 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(StrategyIncompleteException.class)
+    public ResponseEntity<ApiResponse<Map<String, List<Long>>>> handleStrategyIncomplete(StrategyIncompleteException ex) {
+        log.warn("Strategy completeness check failed: {}", ex.getMessage());
+        Map<String, List<Long>> data = new HashMap<>();
+        data.put("areasWithoutGoals", ex.getAreasWithoutGoals());
+        data.put("goalsWithoutObjectives", ex.getGoalsWithoutObjectives());
+        data.put("objectivesWithoutInitiatives", ex.getObjectivesWithoutInitiatives());
+        data.put("initiativesWithoutMeasurements", ex.getInitiativesWithoutMeasurements());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ApiResponse.<Map<String, List<Long>>>builder()
+                        .success(false)
+                        .message(ex.getMessage())
+                        .data(data)
+                        .build());
+    }
+
     @ExceptionHandler(BusinessRuleException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessRule(BusinessRuleException ex) {
         log.warn("Business rule violation: {}", ex.getMessage());
@@ -41,6 +58,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException ex) {
         log.warn("Unauthorized access: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(AiUnavailableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAiUnavailable(AiUnavailableException ex) {
+        log.warn("AI service unavailable: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 

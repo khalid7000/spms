@@ -1,0 +1,51 @@
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.0)
+
+2026-07-05T01:17:59.849+04:00  INFO 32884 --- [           main] com.rit.spms.SpmsApplication             : Starting SpmsApplication using Java 21.0.8 with PID 32884 (C:\Users\kxkcad\projects\demo\spms\target\classes started by kxkcad in C:\Users\kxkcad\projects\demo\spms)
+2026-07-05T01:17:59.853+04:00  INFO 32884 --- [           main] com.rit.spms.SpmsApplication             : No active profile set, falling back to 1 default profile: "default"
+2026-07-05T01:18:00.703+04:00  INFO 32884 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-07-05T01:18:00.839+04:00  INFO 32884 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 125 ms. Found 32 JPA repository interfaces.
+2026-07-05T01:18:01.990+04:00  INFO 32884 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8085 (http)
+2026-07-05T01:18:02.004+04:00  INFO 32884 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-07-05T01:18:02.004+04:00  INFO 32884 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.24]
+2026-07-05T01:18:02.079+04:00  INFO 32884 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-07-05T01:18:02.080+04:00  INFO 32884 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 2170 ms
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+2026-07-05T01:18:02.355+04:00  INFO 32884 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-07-05T01:18:02.580+04:00  INFO 32884 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@f59da34
+2026-07-05T01:18:02.581+04:00  INFO 32884 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-07-05T01:18:02.613+04:00  INFO 32884 --- [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5432/spms (PostgreSQL 17.6)
+2026-07-05T01:18:02.622+04:00  WARN 32884 --- [           main] o.f.c.internal.database.base.Database    : Flyway upgrade recommended: PostgreSQL 17.6 is newer than this version of Flyway and support has not been tested. The latest supported version of PostgreSQL is 16.
+2026-07-05T01:18:02.684+04:00  INFO 32884 --- [           main] o.f.core.internal.command.DbValidate     : Successfully validated 32 migrations (execution time 00:00.050s)
+2026-07-05T01:18:02.768+04:00  INFO 32884 --- [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 32
+2026-07-05T01:18:02.771+04:00  INFO 32884 --- [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-07-05T01:18:02.871+04:00  INFO 32884 --- [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-07-05T01:18:02.942+04:00  INFO 32884 --- [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.5.2.Final
+2026-07-05T01:18:02.986+04:00  INFO 32884 --- [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-07-05T01:18:03.406+04:00  INFO 32884 --- [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-07-05T01:18:03.477+04:00  WARN 32884 --- [           main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-07-05T01:18:05.136+04:00  INFO 32884 --- [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-07-05T01:18:05.197+04:00  INFO 32884 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-07-05T01:18:05.481+04:00  INFO 32884 --- [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-07-05T01:18:07.062+04:00  INFO 32884 --- [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name hybridAuthenticationProvider
+2026-07-05T01:18:07.063+04:00  WARN 32884 --- [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used for username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider.
+2026-07-05T01:18:08.374+04:00  WARN 32884 --- [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-07-05T01:18:08.795+04:00  INFO 32884 --- [           main] o.s.s.web.DefaultSecurityFilterChain     : Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@509e3c03, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@25d45101, org.springframework.security.web.context.SecurityContextHolderFilter@58735597, org.springframework.security.web.header.HeaderWriterFilter@1dae615d, org.springframework.web.filter.CorsFilter@6ccb2162, org.springframework.security.web.authentication.logout.LogoutFilter@79749108, com.rit.spms.security.JwtAuthenticationFilter@ce5417f, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@386b28b, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@366ccef0, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@245ece8d, org.springframework.security.web.session.SessionManagementFilter@59bb012c, org.springframework.security.web.access.ExceptionTranslationFilter@64110f88, org.springframework.security.web.access.intercept.AuthorizationFilter@1dbd1049]
+2026-07-05T01:18:09.232+04:00  INFO 32884 --- [           main] o.s.l.c.support.AbstractContextSource    : Property 'userDn' not set - anonymous context will be used for read-only operations
+2026-07-05T01:18:09.332+04:00  INFO 32884 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8085 (http) with context path '/'
+2026-07-05T01:18:09.344+04:00  INFO 32884 --- [           main] com.rit.spms.SpmsApplication             : Started SpmsApplication in 9.989 seconds (process running for 10.459)
+2026-07-05T01:18:19.679+04:00  INFO 32884 --- [nio-8085-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-07-05T01:18:19.679+04:00  INFO 32884 --- [nio-8085-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-07-05T01:18:19.681+04:00  INFO 32884 --- [nio-8085-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 2 ms
+2026-07-05T01:34:41.395+04:00  WARN 32884 --- [nio-8085-exec-8] c.r.s.exception.GlobalExceptionHandler   : Unauthorized access: You do not have access to this strategy
+2026-07-05T01:34:41.492+04:00  WARN 32884 --- [io-8085-exec-10] c.r.s.exception.GlobalExceptionHandler   : Unauthorized access: Only the Owner can perform this action
+2026-07-05T02:05:50.427+04:00  WARN 32884 --- [nio-8085-exec-7] c.r.s.exception.GlobalExceptionHandler   : Unauthorized access: You do not have access to this strategy
+2026-07-05T02:24:19.507+04:00  WARN 32884 --- [nio-8085-exec-5] c.r.s.exception.GlobalExceptionHandler   : Business rule violation: You must review every suggested area before submitting (missing: Increase Relevance and Industry Engagement)
+2026-07-05T02:34:05.752+04:00  WARN 32884 --- [nio-8085-exec-7] c.r.s.exception.GlobalExceptionHandler   : Business rule violation: You must review every suggested area before submitting (missing: Increase Relevance and Industry Engagement)

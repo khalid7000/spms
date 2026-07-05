@@ -12,6 +12,9 @@ import java.util.Optional;
 public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, Long> {
     Optional<RoleAssignment> findByUserIdAndStrategyId(Long userId, Long strategyId);
     List<RoleAssignment> findByStrategyId(Long strategyId);
+    List<RoleAssignment> findByStrategyIdAndRoleIn(Long strategyId, List<RoleType> roles);
     boolean existsByStrategyIdAndRole(Long strategyId, RoleType role);
     List<RoleAssignment> findByUserId(Long userId);
+    boolean existsByUserIdAndRole(Long userId, RoleType role);
+    void deleteByStrategyId(Long strategyId);
 }

@@ -68,10 +68,12 @@ public class VisionAreaService {
                 .orElseThrow(() -> new ResourceNotFoundException("VisionArea", areaId));
         permissionService.assertOwner(currentUserId, area.getStrategy().getId());
 
-        // Ungroup all goals currently in this area before deleting
-        List<Goal> goalsInArea = goalRepository.findByAreaId(areaId);
-        goalsInArea.forEach(g -> g.setArea(null));
-        goalRepository.saveAll(goalsInArea);
+        // An area with goals still assigned can't be deleted out from under them — the owner must
+        // move or delete every goal first (previously this silently ungrouped them instead of blocking).
+        if (goalRepository.existsByAreaId(areaId)) {
+            throw new BusinessRuleException(
+                    "Cannot delete an area that still has goals assigned. Move or delete all goals from this area first.");
+        }
 
         AppUser user = appUserRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));

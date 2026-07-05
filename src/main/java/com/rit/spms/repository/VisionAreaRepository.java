@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface VisionAreaRepository extends JpaRepository<VisionArea, Long> {
     List<VisionArea> findByStrategyIdOrderBySortOrder(Long strategyId);
+    boolean existsByStrategyId(Long strategyId);
 }

@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface AssessmentPeriodRepository extends JpaRepository<AssessmentPeriod, Long> {
     List<AssessmentPeriod> findByPlanningCycleIdOrderBySortOrder(Long planningCycleId);
+    void deleteByPlanningCycleId(Long planningCycleId);
 }

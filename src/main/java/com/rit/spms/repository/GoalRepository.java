@@ -10,4 +10,7 @@ import java.util.List;
 public interface GoalRepository extends JpaRepository<Goal, Long> {
     List<Goal> findByStrategyIdOrderBySortOrder(Long strategyId);
     List<Goal> findByAreaId(Long areaId);
+    boolean existsByStrategyId(Long strategyId);
+    boolean existsByStrategyIdAndAreaId(Long strategyId, Long areaId);
+    boolean existsByAreaId(Long areaId);
 }

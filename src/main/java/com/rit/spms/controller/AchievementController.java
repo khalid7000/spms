@@ -35,7 +35,7 @@ public class AchievementController {
             @AuthenticationPrincipal UserPrincipal principal) {
         Achievement achievement = achievementService.recordAchievement(measurementId, req, principal.getId());
         return ResponseEntity.status(201).body(
-                ApiResponse.success("Achievement recorded", achievementService.toResponse(achievement)));
+                ApiResponse.success("Achievement recorded", achievementService.toResponse(achievement, principal.getId())));
     }
 
     @PutMapping("/api/achievements/{id}")
@@ -44,7 +44,15 @@ public class AchievementController {
             @Valid @RequestBody CreateAchievementRequest req,
             @AuthenticationPrincipal UserPrincipal principal) {
         Achievement achievement = achievementService.updateAchievement(id, req, principal.getId());
-        return ResponseEntity.ok(ApiResponse.success(achievementService.toResponse(achievement)));
+        return ResponseEntity.ok(ApiResponse.success(achievementService.toResponse(achievement, principal.getId())));
+    }
+
+    @DeleteMapping("/api/achievements/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteAchievement(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        achievementService.deleteAchievement(id, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Achievement deleted", null));
     }
 
     @GetMapping("/api/initiatives/{initiativeId}/aggregated-achievements")

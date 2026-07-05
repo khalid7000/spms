@@ -10,5 +10,6 @@ public class CreateGoalRequest {
 
     private String description;
     private Long themeId;
+    private Long visionAreaId;
     private Integer sortOrder = 0;
 }
