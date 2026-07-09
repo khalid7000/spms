@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/** Bulk user import/update from an admin-uploaded CSV (matched by email); new users get a default password and no system roles. */
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -98,7 +99,6 @@ public class CsvImportService {
                         .email(email)
                         .title(row.getTitle())
                         .department(dept)
-                        .isAdmin(false)
                         .active(true)
                         .passwordHash(defaultHash)
                         .build();

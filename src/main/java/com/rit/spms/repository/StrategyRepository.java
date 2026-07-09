@@ -25,4 +25,5 @@ public interface StrategyRepository extends JpaRepository<Strategy, Long> {
     List<Strategy> findByUserId(@Param("userId") Long userId);
 
     List<Strategy> findByState(StrategyState state);
+    List<Strategy> findByPlanningCycleIdAndState(Long planningCycleId, StrategyState state);
 }

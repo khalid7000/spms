@@ -55,6 +55,15 @@ public class AchievementController {
         return ResponseEntity.ok(ApiResponse.success("Achievement deleted", null));
     }
 
+    @GetMapping("/api/initiatives/{initiativeId}/achievements/across-years")
+    public ResponseEntity<ApiResponse<List<AchievementResponse>>> getAchievementsAcrossYears(
+            @PathVariable Long initiativeId,
+            @RequestParam(required = false) String periodName,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                achievementService.getAchievementsAcrossYears(initiativeId, periodName, principal.getId())));
+    }
+
     @GetMapping("/api/initiatives/{initiativeId}/aggregated-achievements")
     public ResponseEntity<ApiResponse<List<AchievementResponse>>> getAggregatedAchievements(
             @PathVariable Long initiativeId,

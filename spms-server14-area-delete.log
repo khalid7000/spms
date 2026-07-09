@@ -56,3 +56,7 @@ Standard Commons Logging discovery in action with spring-jcl: please remove comm
 2026-07-05T03:47:30.269+04:00  WARN 61436 --- [nio-8085-exec-9] c.r.s.exception.GlobalExceptionHandler   : Unauthorized access: You do not have access to this strategy
 2026-07-05T03:47:35.399+04:00  WARN 61436 --- [nio-8085-exec-2] c.r.s.exception.GlobalExceptionHandler   : Unauthorized access: You do not have access to this strategy
 2026-07-05T03:47:36.422+04:00  WARN 61436 --- [nio-8085-exec-6] c.r.s.exception.GlobalExceptionHandler   : Unauthorized access: You do not have access to this strategy
+2026-07-05T10:52:04.369+04:00  WARN 61436 --- [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=6h47m28s908ms557µs200ns).
+2026-07-05T17:29:50.957+04:00  WARN 61436 --- [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=6h37m55s175ms241µs600ns).
+2026-07-05T17:47:48.564+04:00  WARN 61436 --- [nio-8085-exec-1] c.r.s.exception.GlobalExceptionHandler   : Business rule violation: Department objective must be mapped to at least one university objective before adding initiatives
+2026-07-05T17:48:15.785+04:00  WARN 61436 --- [nio-8085-exec-8] c.r.s.exception.GlobalExceptionHandler   : Business rule violation: A university strategy already exists for this planning cycle

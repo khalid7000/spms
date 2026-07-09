@@ -1,0 +1,2 @@
+ALTER TABLE annual_evaluation_goal_result DROP COLUMN employee_self_rank;
+ALTER TABLE annual_evaluation ADD COLUMN goals_employee_self_rank INTEGER;

@@ -17,6 +17,8 @@ public class ApprovalRequestResponse {
     private String strategyDepartment;
     private String ownerEmail;
     private String ownerName;
+    private Long requiredApproverId;
+    private String requiredApproverEmail;
     private String approverTitle;
     private Integer approvalOrder;
     private Boolean approved;
@@ -33,6 +35,8 @@ public class ApprovalRequestResponse {
                         ? a.getStrategy().getDepartment().getName() : null)
                 .ownerEmail(ownerEmail)
                 .ownerName(ownerName)
+                .requiredApproverId(a.getRequiredApprover().getId())
+                .requiredApproverEmail(a.getRequiredApprover().getEmail())
                 .approverTitle(a.getApproverTitle())
                 .approvalOrder(a.getApprovalOrder())
                 .approved(a.getApproved())

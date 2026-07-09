@@ -3,6 +3,7 @@ package com.rit.spms.service;
 import com.rit.spms.domain.*;
 import com.rit.spms.domain.enums.RoleType;
 import com.rit.spms.domain.enums.StrategyState;
+import com.rit.spms.domain.enums.StrategyType;
 import com.rit.spms.exception.BusinessRuleException;
 import com.rit.spms.exception.ResourceNotFoundException;
 import com.rit.spms.exception.UnauthorizedException;
@@ -16,6 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Academic year lifecycle: create (copies base initiatives/measurements per deployed strategy and
+ * auto-seeds a DRAFT Annual Evaluation for every eligible active user), lock/unlock, close.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -26,19 +31,54 @@ public class AcademicYearService {
     private final InitiativeRepository initiativeRepository;
     private final MeasurementRepository measurementRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
+    private final AppUserRepository appUserRepository;
+    private final AnnualEvaluationService annualEvaluationService;
 
-    public AcademicYear create(String name, LocalDate startDate, LocalDate endDate) {
+    public AcademicYear create(String name, LocalDate startDate, LocalDate endDate, Long universityStrategyId) {
         if (academicYearRepository.existsByName(name)) {
             throw new BusinessRuleException("Academic year '" + name + "' already exists");
         }
-        AcademicYear year = academicYearRepository.save(
-                AcademicYear.builder().name(name).startDate(startDate).endDate(endDate).build());
+        Strategy universityStrategy = strategyRepository.findById(universityStrategyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Strategy", universityStrategyId));
+        if (universityStrategy.getStrategyType() != StrategyType.UNIVERSITY) {
+            throw new BusinessRuleException("An academic year must be associated with a university-level strategy");
+        }
 
-        // Copy base initiatives + measurements for every deployed strategy
-        strategyRepository.findByState(StrategyState.DEPLOYED)
+        AcademicYear year = academicYearRepository.save(
+                AcademicYear.builder().name(name).startDate(startDate).endDate(endDate)
+                        .universityStrategy(universityStrategy).build());
+
+        // Copy base initiatives + measurements for every deployed strategy in the SAME planning
+        // cycle as the selected university strategy (itself plus its department strategies for
+        // that era) -- not every deployed strategy system-wide, which would pull in unrelated cycles.
+        strategyRepository.findByPlanningCycleIdAndState(universityStrategy.getPlanningCycle().getId(), StrategyState.DEPLOYED)
                 .forEach(s -> copyForStrategy(s, year));
 
+        // Open a DRAFT annual evaluation for every active user whose title has portfolio
+        // categories configured (skips users with no resolvable head or no configured title,
+        // same gating PortfolioCategoryService already applies elsewhere)
+        appUserRepository.findByActiveTrue()
+                .forEach(user -> annualEvaluationService.autoCreateForNewAcademicYear(user, year));
+
         return year;
+    }
+
+    /**
+     * A strategy deployed AFTER an academic year already exists never got a year-specific copy of
+     * its initiatives/measurements at creation time (create() only copies into DEPLOYED strategies
+     * that existed then) -- so any achievement recorded on its base initiatives becomes invisible
+     * the instant a specific year is selected in the Strategy Detail page (the tree only ever shows
+     * either the base plan OR that year's copies, never both/a union). Call this the moment a
+     * strategy transitions to DEPLOYED to backfill copies for every academic year that already
+     * exists in its planning cycle, closing that gap symmetrically with create()'s own loop.
+     */
+    public void backfillInitiativeCopiesForNewlyDeployedStrategy(Strategy strategy) {
+        if (strategy.getPlanningCycle() == null) return;
+        for (AcademicYear year : academicYearRepository.findByUniversityStrategy_PlanningCycle_Id(strategy.getPlanningCycle().getId())) {
+            if (!initiativeRepository.existsByStrategyIdAndAcademicYearId(strategy.getId(), year.getId())) {
+                copyForStrategy(strategy, year);
+            }
+        }
     }
 
     private void copyForStrategy(Strategy strategy, AcademicYear year) {

@@ -23,9 +23,12 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Set;
+
 import java.util.HashMap;
 import java.util.Map;
 
+/** Login, self-registration, and password change -- issues/reissues the JWT and reports the user's systemRoles back to the client. */
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -50,7 +53,7 @@ public class AuthController {
         data.put("token", token);
         data.put("userId", principal.getId());
         data.put("email", principal.getEmail());
-        data.put("isAdmin", principal.getIsAdmin());
+        data.put("systemRoles", principal.getSystemRoles());
         data.put("mustChangePassword", principal.getMustChangePassword());
 
         return ResponseEntity.ok(ApiResponse.success("Login successful", data));
@@ -86,7 +89,7 @@ public class AuthController {
         data.put("token", newToken);
         data.put("userId", updated.getId());
         data.put("email", updated.getEmail());
-        data.put("isAdmin", updated.getIsAdmin());
+        data.put("systemRoles", updated.getSystemRoles());
         data.put("mustChangePassword", updated.getMustChangePassword());
 
         return ResponseEntity.ok(ApiResponse.success("Password changed successfully", data));
@@ -99,7 +102,7 @@ public class AuthController {
         }
         var user = adminService.createUser(
                 request.getFname(), request.getLname(), request.getEmail(),
-                request.getTitle(), null, false, request.getPassword());
+                request.getTitle(), null, Set.of(), request.getPassword());
 
         return ResponseEntity.status(201).body(ApiResponse.success("User registered", Map.of(
                 "userId", user.getId(),

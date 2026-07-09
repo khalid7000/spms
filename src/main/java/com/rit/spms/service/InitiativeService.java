@@ -139,6 +139,19 @@ public class InitiativeService {
             throw new UnauthorizedException("Only the Owner can modify initiatives on a frozen objective");
         }
 
+        // Same mapping requirement as createInitiative -- only for base (non-year-specific)
+        // department initiatives. Update rather than delete-then-recreate the InitiativeMapping
+        // row (it's a 1:1 on deptInitiative) so there's no equivalent of the delete/insert
+        // flush-ordering hazard that hit ObjectiveMapping.
+        boolean isDeptStrategy = strategy.getStrategyType() != StrategyType.UNIVERSITY;
+        boolean isBaseInitiative = initiative.getAcademicYear() == null;
+        if (isDeptStrategy && isBaseInitiative) {
+            if (req.getUniversityInitiativeId() == null) {
+                throw new BusinessRuleException("Department initiative must map to exactly one university initiative");
+            }
+            validateUniversityInitiativeForObjective(initiative.getObjective().getId(), req.getUniversityInitiativeId());
+        }
+
         AppUser user = appUserRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
 
@@ -152,6 +165,20 @@ public class InitiativeService {
             initiative.setAssessmentPeriod(period);
         }
         initiative = initiativeRepository.save(initiative);
+
+        if (isDeptStrategy && isBaseInitiative) {
+            InitiativeMapping mapping = initiativeMappingRepository.findByDeptInitiativeId(initiativeId).orElse(null);
+            if (mapping == null || !mapping.getUniversityInitiative().getId().equals(req.getUniversityInitiativeId())) {
+                Initiative univInit = initiativeRepository.findById(req.getUniversityInitiativeId())
+                        .orElseThrow(() -> new ResourceNotFoundException("University Initiative", req.getUniversityInitiativeId()));
+                if (mapping == null) {
+                    mapping = InitiativeMapping.builder().deptInitiative(initiative).universityInitiative(univInit).build();
+                } else {
+                    mapping.setUniversityInitiative(univInit);
+                }
+                initiativeMappingRepository.save(mapping);
+            }
+        }
 
         auditService.log(user, "UPDATE_INITIATIVE", "Initiative", initiativeId, strategy,
                 oldTitle, initiative.getTitle(), "Updated initiative");

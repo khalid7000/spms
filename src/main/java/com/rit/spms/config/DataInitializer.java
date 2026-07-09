@@ -1,6 +1,7 @@
 package com.rit.spms.config;
 
 import com.rit.spms.domain.AppUser;
+import com.rit.spms.domain.enums.SystemRole;
 import com.rit.spms.repository.AppUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +10,8 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Set;
 
 /**
  * Seeds the default system administrator on first startup.
@@ -42,7 +45,7 @@ public class DataInitializer implements ApplicationRunner {
                 .lname("Admin")
                 .email(ADMIN_EMAIL)
                 .passwordHash(passwordHash)
-                .isAdmin(true)
+                .systemRoles(Set.of(SystemRole.ADMIN))
                 .active(true)
                 .mustChangePassword(forceChange)
                 .build();

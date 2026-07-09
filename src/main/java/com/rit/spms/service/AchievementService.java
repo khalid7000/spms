@@ -67,6 +67,11 @@ public class AchievementService {
         AchievementType type = achievementTypeRepository.findById(req.getAchievementTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("AchievementType", req.getAchievementTypeId()));
 
+        boolean isOtherType = "Other".equalsIgnoreCase(type.getName());
+        if (isOtherType && (req.getCustomTypeName() == null || req.getCustomTypeName().isBlank())) {
+            throw new BusinessRuleException("Describe the achievement type when selecting \"Other\"");
+        }
+
         if (req.getAssessmentPeriodId() == null) {
             throw new BusinessRuleException("An assessment period must be selected when recording an achievement");
         }
@@ -77,6 +82,7 @@ public class AchievementService {
                 .measurement(measurement)
                 .title(req.getTitle())
                 .achievementType(type)
+                .customTypeName(isOtherType ? req.getCustomTypeName() : null)
                 .details(req.getDetails())
                 .privateNotes(req.getPrivateNotes())
                 .author(author)
@@ -118,7 +124,12 @@ public class AchievementService {
         if (req.getAchievementTypeId() != null) {
             AchievementType type = achievementTypeRepository.findById(req.getAchievementTypeId())
                     .orElseThrow(() -> new ResourceNotFoundException("AchievementType", req.getAchievementTypeId()));
+            boolean isOtherType = "Other".equalsIgnoreCase(type.getName());
+            if (isOtherType && (req.getCustomTypeName() == null || req.getCustomTypeName().isBlank())) {
+                throw new BusinessRuleException("Describe the achievement type when selecting \"Other\"");
+            }
             achievement.setAchievementType(type);
+            achievement.setCustomTypeName(isOtherType ? req.getCustomTypeName() : null);
         }
 
         if (req.getAssessmentPeriodId() != null) {
@@ -131,6 +142,34 @@ public class AchievementService {
         auditService.log(user, "UPDATE_ACHIEVEMENT", "Achievement", achievementId, strategy,
                 oldTitle, achievement.getTitle(), "Updated achievement");
         return achievement;
+    }
+
+    /**
+     * Admin repair tool: moves an achievement off a "base" (year-less) measurement onto the
+     * year-specific copy matching its own assessment period name -- for achievements recorded
+     * before a strategy's late deployment triggered the backfill (see
+     * AcademicYearService.backfillInitiativeCopiesForNewlyDeployedStrategy), which otherwise stay
+     * permanently invisible under every specific academic-year filter in the Strategy tree, no
+     * matter which period they're tagged with.
+     */
+    public Achievement relocateToMatchingYear(Long achievementId) {
+        Achievement achievement = achievementRepository.findById(achievementId)
+                .orElseThrow(() -> new ResourceNotFoundException("Achievement", achievementId));
+        Measurement current = achievement.getMeasurement();
+        if (current.getAcademicYear() != null) {
+            throw new BusinessRuleException("This achievement is already on a year-specific measurement");
+        }
+        if (achievement.getAssessmentPeriod() == null) {
+            throw new BusinessRuleException("This achievement has no assessment period to match against");
+        }
+        AcademicYear year = academicYearRepository.findByName(achievement.getAssessmentPeriod().getName())
+                .orElseThrow(() -> new BusinessRuleException(
+                        "No academic year named '" + achievement.getAssessmentPeriod().getName() + "' exists"));
+        Measurement target = measurementRepository.findBySourceMeasurementIdAndAcademicYearId(current.getId(), year.getId())
+                .orElseThrow(() -> new BusinessRuleException(
+                        "No year-specific measurement copy exists for '" + year.getName() + "' yet -- the strategy may need to be redeployed to trigger the backfill"));
+        achievement.setMeasurement(target);
+        return achievementRepository.save(achievement);
     }
 
     public void deleteAchievement(Long achievementId, Long currentUserId) {
@@ -170,6 +209,24 @@ public class AchievementService {
                 .stream().map(a -> toResponse(a, currentUserId)).toList();
     }
 
+    /**
+     * Union of a base initiative's own achievements plus every academic-year copy's -- used by the
+     * "Base Plan" (no year selected) view so achievements recorded against a specific year's copy
+     * still surface instead of looking like they've disappeared.
+     */
+    @Transactional(readOnly = true)
+    public List<AchievementResponse> getAchievementsAcrossYears(Long initiativeId, String periodName, Long currentUserId) {
+        Initiative initiative = initiativeRepository.findById(initiativeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Initiative", initiativeId));
+        permissionService.assertCanRead(currentUserId,
+                initiative.getObjective().getGoal().getStrategy().getId());
+
+        List<Achievement> achievements = (periodName != null && !periodName.isBlank())
+                ? achievementRepository.findByBaseInitiativeIdAcrossYearsAndPeriodName(initiativeId, periodName)
+                : achievementRepository.findByBaseInitiativeIdAcrossYears(initiativeId);
+        return achievements.stream().map(a -> toResponse(a, currentUserId)).toList();
+    }
+
     @Transactional(readOnly = true)
     public List<AchievementResponse> getAggregatedAchievements(Long universityInitiativeId, Long currentUserId) {
         Initiative initiative = initiativeRepository.findById(universityInitiativeId)
@@ -196,7 +253,8 @@ public class AchievementService {
                 .measurementId(a.getMeasurement().getId())
                 .title(a.getTitle())
                 .achievementTypeId(a.getAchievementType().getId())
-                .achievementTypeName(a.getAchievementType().getName())
+                .achievementTypeName(a.getEffectiveTypeName())
+                .customTypeName(a.getCustomTypeName())
                 .details(a.getDetails())
                 .privateNotes(isAuthor ? a.getPrivateNotes() : null)
                 .authorId(a.getAuthor().getId())

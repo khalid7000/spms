@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+/** Downloadable report endpoints (strategy coverage/PDF/Excel, annual evaluation PDF) -- generation itself lives in the export services this just wires up. */
 @RestController
 @RequestMapping("/api/reports")
 @RequiredArgsConstructor
@@ -38,6 +39,18 @@ public class ReportController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"strategy-report-" + strategyId + ".pdf\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
+    }
+
+    @GetMapping("/annual-evaluation/{id}/pdf")
+    public ResponseEntity<byte[]> annualEvaluationPdf(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        byte[] pdf = pdfExportService.exportAnnualEvaluation(id, principal.getId());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"annual-evaluation-" + id + ".pdf\"")
                 .contentType(MediaType.APPLICATION_PDF)
                 .body(pdf);
     }

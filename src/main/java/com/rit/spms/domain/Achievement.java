@@ -31,6 +31,11 @@ public class Achievement {
     @JoinColumn(name = "achievement_type_id", nullable = false)
     private AchievementType achievementType;
 
+    // Populated only when achievementType is the "Other" preset -- lets the user describe their
+    // own type instead of being forced into the closest existing option.
+    @Column(name = "custom_type_name", length = 200)
+    private String customTypeName;
+
     @Column(columnDefinition = "TEXT")
     private String details;
 
@@ -52,4 +57,9 @@ public class Achievement {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /** Display name: the typed custom type when set (achievementType is "Other"), else the preset's own name. */
+    public String getEffectiveTypeName() {
+        return (customTypeName != null && !customTypeName.isBlank()) ? customTypeName : achievementType.getName();
+    }
 }

@@ -4,6 +4,7 @@ import com.rit.spms.domain.*;
 import com.rit.spms.domain.enums.RoleType;
 import com.rit.spms.domain.enums.StrategyState;
 import com.rit.spms.domain.enums.StrategyType;
+import com.rit.spms.domain.enums.SystemRole;
 import com.rit.spms.dto.response.AuditLogResponse;
 import com.rit.spms.dto.response.UserResponse;
 import com.rit.spms.exception.BusinessRuleException;
@@ -18,7 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
+/** Admin-console CRUD: users (incl. system roles), org groups, departments, planning cycles, achievement types, audit log queries. */
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -37,6 +40,7 @@ public class AdminService {
     private final ThemeRepository themeRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final AcademicYearService academicYearService;
 
     // --- Org Groups ---
 
@@ -156,7 +160,7 @@ public class AdminService {
     // --- Users ---
 
     public UserResponse createUser(String fname, String lname, String email, String title,
-                                   Long departmentId, boolean isAdmin, String password) {
+                                   Long departmentId, Set<SystemRole> systemRoles, String password) {
         if (appUserRepository.existsByEmail(email)) {
             throw new BusinessRuleException("User with email '" + email + "' already exists");
         }
@@ -164,19 +168,19 @@ public class AdminService {
         String hash = password != null ? passwordEncoder.encode(password) : passwordEncoder.encode("changeme");
         AppUser user = AppUser.builder()
                 .fname(fname).lname(lname).email(email).title(title)
-                .department(dept).isAdmin(isAdmin).active(true).passwordHash(hash)
+                .department(dept).systemRoles(systemRoles != null ? systemRoles : Set.of()).active(true).passwordHash(hash)
                 .build();
         return UserResponse.from(appUserRepository.save(user));
     }
 
     public UserResponse updateUser(Long id, String fname, String lname, String title,
-                                   Long departmentId, Boolean isAdmin) {
+                                   Long departmentId, Set<SystemRole> systemRoles) {
         AppUser user = appUserRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("AppUser", id));
         if (fname != null) user.setFname(fname);
         if (lname != null) user.setLname(lname);
         if (title != null) user.setTitle(title);
-        if (isAdmin != null) user.setIsAdmin(isAdmin);
+        if (systemRoles != null) user.setSystemRoles(systemRoles);
         if (departmentId != null) {
             user.setDepartment(resolveOptionalDepartment(departmentId));
         } else {
@@ -377,7 +381,11 @@ public class AdminService {
         Strategy strategy = strategyRepository.findById(strategyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Strategy", strategyId));
         strategy.setState(newState);
-        return strategyRepository.save(strategy);
+        Strategy saved = strategyRepository.save(strategy);
+        if (newState == com.rit.spms.domain.enums.StrategyState.DEPLOYED) {
+            academicYearService.backfillInitiativeCopiesForNewlyDeployedStrategy(saved);
+        }
+        return saved;
     }
 
     // --- Role Assignments ---

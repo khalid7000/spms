@@ -1,13 +1,22 @@
 package com.rit.spms.service;
 
+import com.rit.spms.domain.AnnualEvaluation;
+import com.rit.spms.domain.AppUser;
+import com.rit.spms.domain.Department;
 import com.rit.spms.domain.Strategy;
 import com.rit.spms.domain.SwotParticipant;
 import com.rit.spms.domain.SwotSession;
+import com.rit.spms.domain.OrgGroup;
 import com.rit.spms.domain.enums.RoleType;
 import com.rit.spms.domain.enums.StrategyState;
 import com.rit.spms.domain.enums.SwotPhase;
+import com.rit.spms.domain.enums.SystemRole;
+import com.rit.spms.exception.BusinessRuleException;
 import com.rit.spms.exception.ResourceNotFoundException;
 import com.rit.spms.exception.UnauthorizedException;
+import com.rit.spms.repository.AppUserRepository;
+import com.rit.spms.repository.DepartmentRepository;
+import com.rit.spms.repository.OrgGroupRepository;
 import com.rit.spms.repository.RoleAssignmentRepository;
 import com.rit.spms.repository.StrategyApprovalRepository;
 import com.rit.spms.repository.StrategyRepository;
@@ -17,8 +26,17 @@ import com.rit.spms.repository.VisionAreaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 
+/**
+ * Central authorization checks for Strategy roles/state, SWOT phases, Portfolio goal-cycle
+ * management, and Annual Evaluation report access -- one place for the "who is allowed to do X"
+ * questions the rest of the app's services delegate to rather than re-deriving inline.
+ */
 @Service
 @RequiredArgsConstructor
 public class PermissionService {
@@ -29,6 +47,173 @@ public class PermissionService {
     private final SwotSessionRepository swotSessionRepository;
     private final SwotParticipantRepository swotParticipantRepository;
     private final VisionAreaRepository visionAreaRepository;
+    private final AppUserRepository appUserRepository;
+    private final DepartmentRepository departmentRepository;
+    private final OrgGroupRepository orgGroupRepository;
+
+    // ─── Employee Portfolio & Goals ────────────────────────────────────────
+
+    /**
+     * The user who supervises `employee` for goal-setting/evaluation purposes: their department
+     * head, or -- if the employee IS their own department's head, which would otherwise resolve
+     * to themselves -- the head of the nearest ancestor org group (walking up the parent chain,
+     * since a department head's own supervisor isn't tracked at the department level). Empty if
+     * neither can be resolved (no department head at all, or no org group head above a self-heading
+     * department head).
+     */
+    public Optional<AppUser> resolveSupervisor(AppUser employee) {
+        Department dept = employee.getDepartment();
+        if (dept == null || dept.getHead() == null) {
+            return Optional.empty();
+        }
+        if (!dept.getHead().getId().equals(employee.getId())) {
+            return Optional.of(dept.getHead());
+        }
+        OrgGroup group = dept.getOrgGroup();
+        while (group != null) {
+            if (group.getHead() != null && !group.getHead().getId().equals(employee.getId())) {
+                return Optional.of(group.getHead());
+            }
+            group = group.getParent();
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Resolves the employee's supervisor (see {@link #resolveSupervisor}) and asserts the current
+     * user is either that supervisor or an admin. The supervisor is derived server-side (never
+     * client-supplied) so a client can't set arbitrary goals for an employee they don't actually lead.
+     */
+    public AppUser resolveAndAssertCanManageGoalsFor(Long currentUserId, AppUser employee) {
+        AppUser leader = resolveSupervisor(employee)
+                .orElseThrow(() -> new BusinessRuleException(
+                        "Employee has no supervisor assigned; cannot set goals for this employee"));
+        AppUser currentUser = appUserRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
+        boolean isLeader = leader.getId().equals(currentUserId);
+        boolean isAdmin = currentUser.hasRole(SystemRole.ADMIN);
+        if (!isLeader && !isAdmin) {
+            throw new UnauthorizedException("Only this employee's supervisor or an admin can manage their goals");
+        }
+        return leader;
+    }
+
+    /** Self, the employee's resolved department head, or an admin may view an employee's portfolio. */
+    public void assertCanViewPortfolioOf(Long currentUserId, AppUser employee) {
+        if (employee.getId().equals(currentUserId)) {
+            return;
+        }
+        AppUser currentUser = appUserRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
+        if (currentUser.hasRole(SystemRole.ADMIN)) {
+            return;
+        }
+        Department dept = employee.getDepartment();
+        boolean isHead = dept != null && dept.getHead() != null && dept.getHead().getId().equals(currentUserId);
+        if (!isHead) {
+            throw new UnauthorizedException("Only the employee, their department head, or an admin can view this portfolio");
+        }
+    }
+
+    /**
+     * Walks the same Department.head -> OrgGroup.parent chain ApprovalService uses to build
+     * approval chains, but to answer a permission question instead: does `candidate` sit anywhere
+     * above `employee` in the reporting hierarchy (Faculty -> Chair -> Dean -> Provost, etc.)?
+     */
+    public boolean isAboveInHierarchy(AppUser candidate, AppUser employee) {
+        Department dept = employee.getDepartment();
+        if (dept == null) {
+            return false;
+        }
+        AppUser deptHead = dept.getHead();
+        if (deptHead != null && deptHead.getId().equals(candidate.getId())) {
+            return true;
+        }
+        OrgGroup group = dept.getOrgGroup();
+        while (group != null) {
+            AppUser groupHead = group.getHead();
+            if (groupHead != null && groupHead.getId().equals(candidate.getId())) {
+                return true;
+            }
+            group = group.getParent();
+        }
+        return false;
+    }
+
+    /**
+     * Only the employee, HR/Admin, or anyone above the employee in the reporting hierarchy
+     * (Faculty -> Chair -> Dean -> Provost) may pull a report of a concluded Annual Evaluation.
+     */
+    public void assertCanViewEvaluationReport(Long currentUserId, AnnualEvaluation evaluation) {
+        if (evaluation.getEmployee().getId().equals(currentUserId)) {
+            return;
+        }
+        AppUser currentUser = appUserRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
+        if (currentUser.hasRole(SystemRole.ADMIN) || currentUser.hasRole(SystemRole.HR)) {
+            return;
+        }
+        if (isAboveInHierarchy(currentUser, evaluation.getEmployee())) {
+            return;
+        }
+        throw new UnauthorizedException("Only the employee, HR, an admin, or someone above them in the reporting hierarchy can view this report");
+    }
+
+    /**
+     * Every department the user heads directly, plus every department under any org group they
+     * head (recursively through sub-groups) -- shared by Organization Evaluations' hierarchy
+     * rollup and by the "is this console redundant with Team Evaluations" check (redundant exactly
+     * when this set is no bigger than the departments the user heads directly -- see
+     * UserController#getMyLeadership).
+     */
+    public Set<Long> resolveHierarchyDepartmentIds(Long userId) {
+        Set<Long> departmentIds = new HashSet<>();
+        for (Department dept : departmentRepository.findByHeadId(userId)) {
+            departmentIds.add(dept.getId());
+        }
+
+        Deque<OrgGroup> queue = new ArrayDeque<>(orgGroupRepository.findByHeadId(userId));
+        Set<Long> visitedGroupIds = new HashSet<>();
+        while (!queue.isEmpty()) {
+            OrgGroup group = queue.poll();
+            if (!visitedGroupIds.add(group.getId())) {
+                continue;
+            }
+            for (Department dept : departmentRepository.findByOrgGroupId(group.getId())) {
+                departmentIds.add(dept.getId());
+            }
+            queue.addAll(orgGroupRepository.findByParentId(group.getId()));
+        }
+        return departmentIds;
+    }
+
+    /** Only that department's head, or an admin, may create a strategy for it. */
+    public void assertCanCreateDepartmentStrategy(Long currentUserId, Long departmentId) {
+        AppUser currentUser = appUserRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
+        if (currentUser.hasRole(SystemRole.ADMIN)) {
+            return;
+        }
+        boolean isHead = departmentRepository.findByHeadId(currentUserId).stream()
+                .anyMatch(d -> d.getId().equals(departmentId));
+        if (!isHead) {
+            throw new UnauthorizedException("Only this department's head or an admin can create a strategy for it");
+        }
+    }
+
+    /** Only the root Org Group's head (e.g. the Provost), or an admin, may create the university strategy. */
+    public void assertCanCreateUniversityStrategy(Long currentUserId) {
+        AppUser currentUser = appUserRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
+        if (currentUser.hasRole(SystemRole.ADMIN)) {
+            return;
+        }
+        boolean isRootHead = orgGroupRepository.findByParentIsNull().stream()
+                .anyMatch(g -> g.getHead() != null && g.getHead().getId().equals(currentUserId));
+        if (!isRootHead) {
+            throw new UnauthorizedException("Only the head of the top-level Org Group or an admin can create the university strategy");
+        }
+    }
 
     public RoleType getUserRole(Long userId, Long strategyId) {
         return roleAssignmentRepository.findByUserIdAndStrategyId(userId, strategyId)

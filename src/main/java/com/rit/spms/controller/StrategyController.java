@@ -1,6 +1,7 @@
 package com.rit.spms.controller;
 
 import com.rit.spms.domain.Strategy;
+import com.rit.spms.domain.enums.SystemRole;
 import com.rit.spms.dto.request.ChangeStateRequest;
 import com.rit.spms.dto.request.CreateStrategyRequest;
 import com.rit.spms.dto.request.RoleAssignmentRequest;
@@ -28,6 +29,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+/** Strategy CRUD, role assignments, state transitions, and audit-log/report access for a single strategy. */
 @RestController
 @RequestMapping("/api/strategies")
 @RequiredArgsConstructor
@@ -94,7 +96,7 @@ public class StrategyController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size,
             @AuthenticationPrincipal UserPrincipal principal) {
-        boolean isAdmin = Boolean.TRUE.equals(principal.getIsAdmin());
+        boolean isAdmin = principal.hasRole(SystemRole.ADMIN);
         boolean isOwner = permissionService.isOwner(principal.getId(), id);
         if (!isAdmin && !isOwner) {
             throw new UnauthorizedException("Only strategy owners can view the audit log");

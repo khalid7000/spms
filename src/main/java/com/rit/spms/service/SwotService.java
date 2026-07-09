@@ -25,6 +25,7 @@ import com.rit.spms.repository.SwotEntryRepository;
 import com.rit.spms.repository.SwotParticipantRepository;
 import com.rit.spms.repository.SwotSessionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +53,7 @@ public class SwotService {
     private final PermissionService permissionService;
     private final AuditService auditService;
     private final SwotProperties swotProperties;
+    private final ApplicationEventPublisher eventPublisher;
 
     public SwotSession startSwot(Long strategyId, Long ownerId) {
         Strategy strategy = strategyRepository.findById(strategyId)
@@ -72,6 +74,9 @@ public class SwotService {
                     .user(ra.getUser())
                     .roleAtInvite(ra.getRole())
                     .build());
+            if (!ra.getUser().getId().equals(ownerId)) {
+                eventPublisher.publishEvent(new SwotInviteEvent(strategyId, ra.getUser().getId()));
+            }
         }
 
         auditService.log(owner, "SWOT_STARTED", "SwotSession", session.getId(), strategy,

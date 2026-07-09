@@ -21,4 +21,9 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
            "LOWER(u.fname) LIKE LOWER(CONCAT('%',:q,'%')) OR " +
            "LOWER(u.lname) LIKE LOWER(CONCAT('%',:q,'%')))")
     List<AppUser> searchActive(@Param("q") String q, Pageable pageable);
+
+    List<AppUser> findByDepartmentIdAndActiveTrueOrderByFnameAscLnameAsc(Long departmentId);
+
+    @Query("SELECT DISTINCT u.title FROM AppUser u WHERE u.title IS NOT NULL AND u.active = true")
+    List<String> findDistinctActiveUserTitles();
 }

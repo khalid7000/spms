@@ -29,6 +29,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/** Builds downloadable PDFs (iText 7) for a Strategy's tree/achievements and for a concluded Annual Evaluation. */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -39,8 +40,16 @@ public class PdfExportService {
     private final GoalRepository goalRepository;
     private final ObjectiveRepository objectiveRepository;
     private final InitiativeRepository initiativeRepository;
+    private final MeasurementRepository measurementRepository;
     private final AchievementRepository achievementRepository;
     private final PermissionService permissionService;
+    private final AnnualEvaluationRepository annualEvaluationRepository;
+    private final AnnualEvaluationCategoryResultRepository annualEvaluationCategoryResultRepository;
+    private final AnnualEvaluationCriteriaResultRepository annualEvaluationCriteriaResultRepository;
+    private final AnnualEvaluationGoalResultRepository annualEvaluationGoalResultRepository;
+    private final CategoryCriteriaRepository categoryCriteriaRepository;
+    private final TitleRankLabelRepository titleRankLabelRepository;
+    private final PortfolioEntryRepository portfolioEntryRepository;
 
     // ── palette ───────────────────────────────────────────────────────────────
 
@@ -175,6 +184,165 @@ public class PdfExportService {
         return baos.toByteArray();
     }
 
+    // ── Annual Evaluation report ──────────────────────────────────────────────
+
+    public byte[] exportAnnualEvaluation(Long evaluationId, Long currentUserId) {
+        AnnualEvaluation evaluation = annualEvaluationRepository.findById(evaluationId)
+                .orElseThrow(() -> new ResourceNotFoundException("AnnualEvaluation", evaluationId));
+        permissionService.assertCanViewEvaluationReport(currentUserId, evaluation);
+        if (evaluation.getState() != com.rit.spms.domain.enums.AnnualEvaluationState.CONCLUDED) {
+            throw new com.rit.spms.exception.BusinessRuleException(
+                    "A report can only be generated once the evaluation is concluded");
+        }
+
+        AppUser employee = evaluation.getEmployee();
+        AppUser head = evaluation.getHead();
+        String generated = DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' HH:mm").format(LocalDateTime.now());
+        DateTimeFormatter df = DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' HH:mm");
+
+        List<AnnualEvaluationCategoryResult> categoryResults = annualEvaluationCategoryResultRepository.findByEvaluationId(evaluationId);
+        List<AnnualEvaluationCriteriaResult> criteriaResults = annualEvaluationCriteriaResultRepository.findByEvaluationId(evaluationId);
+        List<AnnualEvaluationGoalResult> goalResults = annualEvaluationGoalResultRepository.findByEvaluationId(evaluationId);
+        List<PortfolioEntry> entries = portfolioEntryRepository.findByEmployeeIdOrderByCreatedAtDesc(employee.getId());
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (PdfWriter writer = new PdfWriter(baos);
+             PdfDocument pdf   = new PdfDocument(writer);
+             Document   doc    = new Document(pdf)) {
+
+            doc.setMargins(40, 40, 40, 40);
+
+            doc.add(new Paragraph("Annual Evaluation")
+                    .setFontSize(22).setBold().setFontColor(NAVY)
+                    .setTextAlignment(TextAlignment.CENTER).setMarginBottom(5));
+            doc.add(new Paragraph(employee.getFname() + " " + employee.getLname()
+                    + (employee.getTitle() != null ? "  ·  " + employee.getTitle() : "")
+                    + "  ·  " + evaluation.getAcademicYear().getName())
+                    .setFontSize(13).setFontColor(GRAY_TEXT)
+                    .setTextAlignment(TextAlignment.CENTER).setMarginBottom(3));
+            doc.add(new Paragraph("Evaluated by: " + head.getFname() + " " + head.getLname())
+                    .setFontSize(11).setFontColor(GRAY_TEXT)
+                    .setTextAlignment(TextAlignment.CENTER).setMarginBottom(3));
+            doc.add(new Paragraph("Report generated: " + generated)
+                    .setFontSize(10).setItalic().setFontColor(GRAY_TEXT)
+                    .setTextAlignment(TextAlignment.CENTER).setMarginBottom(14));
+            doc.add(new LineSeparator(new SolidLine()).setMarginBottom(10));
+
+            for (AnnualEvaluationCategoryResult catResult : categoryResults) {
+                PortfolioCategory category = catResult.getCategory();
+                Long titleId = category.getTitle().getId();
+
+                areaHeader(doc, category.getCategoryName());
+                doc.add(new Paragraph("Self-assessment: " + rankText(titleId, catResult.getEmployeeSelfRank())
+                        + "     Head rank: " + rankText(titleId, catResult.getHeadCategoryRank()))
+                        .setFontSize(11).setBold().setFontColor(NAVY_MID).setMarginBottom(6));
+                if (catResult.getHeadComments() != null && !catResult.getHeadComments().isBlank()) {
+                    doc.add(new Paragraph("Head comments: " + catResult.getHeadComments())
+                            .setFontSize(9).setItalic().setFontColor(GRAY_TEXT).setMarginBottom(6));
+                }
+
+                for (CategoryCriteria criteria : categoryCriteriaRepository.findByCategoryIdOrderBySortOrder(category.getId())) {
+                    Integer headRank = criteriaResults.stream()
+                            .filter(r -> r.getCriteria().getId().equals(criteria.getId()))
+                            .map(AnnualEvaluationCriteriaResult::getHeadRank)
+                            .findFirst().orElse(null);
+
+                    doc.add(new Paragraph("Criterion: " + criteria.getCriteriaName() + "  —  " + rankText(titleId, headRank))
+                            .setFontSize(10).setBold().setFontColor(ColorConstants.BLACK)
+                            .setMarginLeft(6).setMarginTop(4).setMarginBottom(1));
+
+                    List<PortfolioEntry> criteriaEntries = entries.stream()
+                            .filter(e -> e.getCriteria() != null && e.getCriteria().getId().equals(criteria.getId()))
+                            .toList();
+                    doc.add(new Paragraph("Criterion Achievements:")
+                            .setFontSize(9).setBold().setFontColor(GRAY_TEXT)
+                            .setMarginLeft(12).setMarginBottom(1));
+                    if (criteriaEntries.isEmpty()) {
+                        doc.add(new Paragraph("No achievements tagged to this criteria.")
+                                .setFontSize(9).setItalic().setFontColor(GRAY_TEXT)
+                                .setMarginLeft(18).setMarginBottom(2));
+                    }
+                    for (PortfolioEntry entry : criteriaEntries) {
+                        doc.add(new Paragraph("•  " + entry.getAchievement().getTitle()
+                                + "  (" + entry.getAchievement().getRecordedAt().format(df) + ")")
+                                .setFontSize(9).setFontColor(GRAY_TEXT)
+                                .setMarginLeft(18).setMarginBottom(2));
+                    }
+                }
+            }
+
+            if (!goalResults.isEmpty()) {
+                Long titleIdForGoals = categoryResults.isEmpty() ? null : categoryResults.get(0).getCategory().getTitle().getId();
+                areaHeader(doc, "Annual Goals");
+                doc.add(new Paragraph("Self-assessment: " + rankText(titleIdForGoals, evaluation.getGoalsEmployeeSelfRank())
+                                + "   |   Head rank: " + rankText(titleIdForGoals, evaluation.getGoalsHeadRank()))
+                        .setFontSize(11).setBold().setFontColor(NAVY_MID).setMarginBottom(6));
+                for (AnnualEvaluationGoalResult goalResult : goalResults) {
+                    EmployeeGoal goal = goalResult.getGoal();
+                    doc.add(new Paragraph("Goal: " + goal.getGoalTitle() + "  —  " + rankText(titleIdForGoals, goalResult.getHeadGoalRank()))
+                            .setFontSize(10).setBold().setFontColor(ColorConstants.BLACK)
+                            .setMarginLeft(6).setMarginTop(4).setMarginBottom(1));
+
+                    List<PortfolioEntry> goalEntries = entries.stream()
+                            .filter(e -> e.getGoal() != null && e.getGoal().getId().equals(goal.getId()))
+                            .toList();
+                    doc.add(new Paragraph("Goal Achievements:")
+                            .setFontSize(9).setBold().setFontColor(GRAY_TEXT)
+                            .setMarginLeft(12).setMarginBottom(1));
+                    if (goalEntries.isEmpty()) {
+                        doc.add(new Paragraph(Boolean.TRUE.equals(goalResult.getEmployeeNothingToReport())
+                                        ? "Employee reported nothing for this goal." : "No achievements tagged to this goal.")
+                                .setFontSize(9).setItalic().setFontColor(GRAY_TEXT)
+                                .setMarginLeft(18).setMarginBottom(2));
+                    }
+                    for (PortfolioEntry entry : goalEntries) {
+                        doc.add(new Paragraph("•  " + entry.getAchievement().getTitle()
+                                + "  (" + entry.getAchievement().getRecordedAt().format(df) + ")")
+                                .setFontSize(9).setFontColor(GRAY_TEXT)
+                                .setMarginLeft(18).setMarginBottom(2));
+                    }
+                }
+                if (evaluation.getGoalsHeadComments() != null && !evaluation.getGoalsHeadComments().isBlank()) {
+                    doc.add(new Paragraph("Head comments: " + evaluation.getGoalsHeadComments())
+                            .setFontSize(9).setItalic().setFontColor(GRAY_TEXT).setMarginBottom(6));
+                }
+            }
+
+            doc.add(new LineSeparator(new SolidLine()).setMarginTop(14).setMarginBottom(10));
+            doc.add(new Paragraph("Overall Annual Performance Rank: " + rankText(
+                    categoryResults.isEmpty() ? null : categoryResults.get(0).getCategory().getTitle().getId(),
+                    evaluation.getHeadOverallRank()))
+                    .setFontSize(13).setBold().setFontColor(NAVY).setMarginBottom(10));
+
+            doc.add(new Paragraph("Head signature: " + (evaluation.getHeadSignedAt() != null
+                    ? "Signed by " + evaluation.getHeadSignatureName() + " on " + evaluation.getHeadSignedAt().format(df)
+                    : "Not signed"))
+                    .setFontSize(10).setFontColor(GRAY_TEXT).setMarginBottom(2));
+            if (Boolean.TRUE.equals(evaluation.getEmployeeRefused())) {
+                doc.add(new Paragraph("Employee: Refused to sign — " + evaluation.getEmployeeRefusalRationale())
+                        .setFontSize(10).setFontColor(RED_C).setMarginBottom(2));
+            } else {
+                doc.add(new Paragraph("Employee signature: " + (evaluation.getEmployeeSignedAt() != null
+                        ? "Signed by " + evaluation.getEmployeeSignatureName() + " on " + evaluation.getEmployeeSignedAt().format(df)
+                        : "Not signed"))
+                        .setFontSize(10).setFontColor(GRAY_TEXT).setMarginBottom(2));
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate PDF: " + e.getMessage(), e);
+        }
+
+        return baos.toByteArray();
+    }
+
+    private String rankText(Long titleId, Integer rank) {
+        if (rank == null) return "—";
+        if (titleId == null) return String.valueOf(rank);
+        return titleRankLabelRepository.findByTitleIdAndRank(titleId, rank)
+                .map(l -> rank + " – " + l.getLabel())
+                .orElse(String.valueOf(rank));
+    }
+
     // ── section helpers ───────────────────────────────────────────────────────
 
     private void areaHeader(Document doc, String name) {
@@ -246,6 +414,14 @@ public class PdfExportService {
         // initiative row
         doc.add(statusRow("      ●  " + ini.getTitle(), count, threshold,
                 10f, false, null, ColorConstants.BLACK, 0));
+
+        // KPIs (measurements) this initiative is tracked against — rendered before the
+        // achievement evidence below, same order as the on-screen strategy tree.
+        List<Measurement> measurements =
+                measurementRepository.findByInitiativeIdOrderBySortOrder(ini.getId());
+        for (Measurement m : measurements) {
+            renderMeasurement(doc, m);
+        }
 
         if (isUniversity) {
             List<Object[]> rows = achievementRepository
@@ -331,6 +507,27 @@ public class PdfExportService {
                 }
             }
         }
+    }
+
+    /** One KPI line: description plus target/actual, actual color-coded same as the on-screen ratio (green/amber/red). */
+    private void renderMeasurement(Document doc, Measurement m) {
+        String unit = m.getUnit() != null && !m.getUnit().isBlank() ? " " + m.getUnit() : "";
+        String target = m.getTargetValue() != null ? m.getTargetValue().toPlainString() : "—";
+        String actual = m.getActualValue() != null ? m.getActualValue().toPlainString() : "—";
+
+        DeviceRgb actualColor = GRAY_TEXT;
+        if (m.getTargetValue() != null && m.getTargetValue().signum() > 0 && m.getActualValue() != null) {
+            double ratio = m.getActualValue().doubleValue() / m.getTargetValue().doubleValue();
+            actualColor = ratio >= 1 ? GREEN : ratio >= 0.7 ? AMBER : RED_C;
+        }
+
+        Paragraph line = new Paragraph()
+                .add(new Text("                  ◦  " + m.getDescription() + "   ").setFontColor(NAVY_MID))
+                .add(new Text("Target: " + target + unit + "   ").setFontColor(GRAY_TEXT))
+                .add(new Text("Actual: " + actual + unit).setFontColor(actualColor).setBold())
+                .setFontSize(8.5f)
+                .setMarginTop(0).setMarginBottom(2);
+        doc.add(line);
     }
 
     // ── cell / row builders ───────────────────────────────────────────────────

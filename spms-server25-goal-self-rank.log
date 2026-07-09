@@ -1,0 +1,54 @@
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.0)
+
+2026-07-09T12:15:04.642+04:00  INFO 1084 --- [           main] com.rit.spms.SpmsApplication             : Starting SpmsApplication using Java 21.0.8 with PID 1084 (C:\Users\kxkcad\projects\demo\spms\target\classes started by kxkcad in C:\Users\kxkcad\projects\demo\spms)
+2026-07-09T12:15:04.645+04:00  INFO 1084 --- [           main] com.rit.spms.SpmsApplication             : No active profile set, falling back to 1 default profile: "default"
+2026-07-09T12:15:05.268+04:00  INFO 1084 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-07-09T12:15:05.399+04:00  INFO 1084 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 119 ms. Found 46 JPA repository interfaces.
+2026-07-09T12:15:06.219+04:00  INFO 1084 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8085 (http)
+2026-07-09T12:15:06.231+04:00  INFO 1084 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-07-09T12:15:06.232+04:00  INFO 1084 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.24]
+2026-07-09T12:15:06.292+04:00  INFO 1084 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-07-09T12:15:06.292+04:00  INFO 1084 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1612 ms
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+2026-07-09T12:15:06.482+04:00  INFO 1084 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-07-09T12:15:06.756+04:00  INFO 1084 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@7dd45c93
+2026-07-09T12:15:06.758+04:00  INFO 1084 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-07-09T12:15:06.781+04:00  INFO 1084 --- [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5432/spms (PostgreSQL 17.6)
+2026-07-09T12:15:06.788+04:00  WARN 1084 --- [           main] o.f.c.internal.database.base.Database    : Flyway upgrade recommended: PostgreSQL 17.6 is newer than this version of Flyway and support has not been tested. The latest supported version of PostgreSQL is 16.
+2026-07-09T12:15:06.846+04:00  INFO 1084 --- [           main] o.f.core.internal.command.DbValidate     : Successfully validated 61 migrations (execution time 00:00.047s)
+2026-07-09T12:15:06.908+04:00  INFO 1084 --- [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 60
+2026-07-09T12:15:06.918+04:00  INFO 1084 --- [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "61 - annual evaluation goal self rank"
+2026-07-09T12:15:06.939+04:00  INFO 1084 --- [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 1 migration to schema "public", now at version v61 (execution time 00:00.010s)
+2026-07-09T12:15:07.015+04:00  INFO 1084 --- [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-07-09T12:15:07.081+04:00  INFO 1084 --- [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.5.2.Final
+2026-07-09T12:15:07.115+04:00  INFO 1084 --- [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-07-09T12:15:07.533+04:00  INFO 1084 --- [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-07-09T12:15:07.590+04:00  WARN 1084 --- [           main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-07-09T12:15:08.867+04:00  INFO 1084 --- [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-07-09T12:15:08.916+04:00  INFO 1084 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-07-09T12:15:09.164+04:00  INFO 1084 --- [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-07-09T12:15:10.322+04:00  INFO 1084 --- [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name hybridAuthenticationProvider
+2026-07-09T12:15:10.323+04:00  WARN 1084 --- [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used for username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider.
+2026-07-09T12:15:11.243+04:00  WARN 1084 --- [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-07-09T12:15:11.507+04:00  INFO 1084 --- [           main] o.s.s.web.DefaultSecurityFilterChain     : Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@5d948005, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@794e544b, org.springframework.security.web.context.SecurityContextHolderFilter@2c33bc4, org.springframework.security.web.header.HeaderWriterFilter@f95a28, org.springframework.web.filter.CorsFilter@5706f658, org.springframework.security.web.authentication.logout.LogoutFilter@19f634ac, com.rit.spms.security.JwtAuthenticationFilter@21743abe, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@200bdba4, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@73950608, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@5ea231be, org.springframework.security.web.session.SessionManagementFilter@68082dee, org.springframework.security.web.access.ExceptionTranslationFilter@a0361cb, org.springframework.security.web.access.intercept.AuthorizationFilter@263059cd]
+2026-07-09T12:15:11.766+04:00  INFO 1084 --- [           main] o.s.l.c.support.AbstractContextSource    : Property 'userDn' not set - anonymous context will be used for read-only operations
+2026-07-09T12:15:11.826+04:00  INFO 1084 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8085 (http) with context path '/'
+2026-07-09T12:15:11.832+04:00  INFO 1084 --- [           main] com.rit.spms.SpmsApplication             : Started SpmsApplication in 7.536 seconds (process running for 7.847)
+2026-07-09T12:15:12.735+04:00  INFO 1084 --- [nio-8085-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-07-09T12:15:12.735+04:00  INFO 1084 --- [nio-8085-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-07-09T12:15:12.736+04:00  INFO 1084 --- [nio-8085-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+[ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:3.3.0:run (default-cli) on project spms: Process terminated with exit code: -1 -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

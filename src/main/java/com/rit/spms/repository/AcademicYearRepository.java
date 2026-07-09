@@ -12,4 +12,5 @@ public interface AcademicYearRepository extends JpaRepository<AcademicYear, Long
     List<AcademicYear> findAllByOrderByCreatedAtDesc();
     boolean existsByName(String name);
     Optional<AcademicYear> findByName(String name);
+    List<AcademicYear> findByUniversityStrategy_PlanningCycle_Id(Long planningCycleId);
 }

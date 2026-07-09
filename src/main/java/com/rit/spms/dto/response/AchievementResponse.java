@@ -13,6 +13,7 @@ public class AchievementResponse {
     private String title;
     private Long achievementTypeId;
     private String achievementTypeName;
+    private String customTypeName;
     private String details;
     private String privateNotes;
     private Long authorId;

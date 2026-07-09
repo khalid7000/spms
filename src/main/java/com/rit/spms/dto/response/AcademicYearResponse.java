@@ -16,6 +16,9 @@ public class AcademicYearResponse {
     LocalDate endDate;
     Boolean closed;
     LocalDateTime createdAt;
+    Long universityStrategyId;
+    String universityStrategyTitle;
+    Long planningCycleId;
 
     public static AcademicYearResponse from(AcademicYear y) {
         return AcademicYearResponse.builder()
@@ -25,6 +28,9 @@ public class AcademicYearResponse {
                 .endDate(y.getEndDate())
                 .closed(y.getClosed())
                 .createdAt(y.getCreatedAt())
+                .universityStrategyId(y.getUniversityStrategy() != null ? y.getUniversityStrategy().getId() : null)
+                .universityStrategyTitle(y.getUniversityStrategy() != null ? y.getUniversityStrategy().getTitle() : null)
+                .planningCycleId(y.getUniversityStrategy() != null ? y.getUniversityStrategy().getPlanningCycle().getId() : null)
                 .build();
     }
 }

@@ -130,7 +130,7 @@ public class SwotSuggestionController {
     public ResponseEntity<ApiResponse<Void>> deleteGoalAddition(
             @PathVariable Long strategyId, @PathVariable Long additionId,
             @AuthenticationPrincipal UserPrincipal principal) {
-        permissionService.assertCanRead(principal.getId(), strategyId);
+        permissionService.assertCanProposeGoalAddition(principal.getId(), strategyId);
         swotReviewService.deleteGoalAddition(strategyId, principal.getId(), additionId);
         return ResponseEntity.ok(ApiResponse.success("Goal removed", null));
     }

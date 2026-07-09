@@ -19,10 +19,45 @@ public interface AchievementRepository extends JpaRepository<Achievement, Long> 
 
     long countByMeasurementInitiativeId(Long initiativeId);
 
+    long countByMeasurementInitiativeIdAndAssessmentPeriodId(Long initiativeId, Long assessmentPeriodId);
+
+    @Query("SELECT COUNT(a) FROM Achievement a WHERE " +
+           "(a.measurement.initiative.id = :baseInitiativeId OR a.measurement.initiative.sourceInitiative.id = :baseInitiativeId) " +
+           "AND a.assessmentPeriod.id = :periodId")
+    long countByBaseInitiativeIdAcrossYearsAndAssessmentPeriodId(@Param("baseInitiativeId") Long baseInitiativeId,
+                                                                  @Param("periodId") Long periodId);
+
+    @Query("SELECT COUNT(a) FROM Achievement a WHERE a.measurement.initiative.id IN " +
+           "(SELECT im.deptInitiative.id FROM InitiativeMapping im WHERE im.universityInitiative.id = :universityInitiativeId) " +
+           "AND a.assessmentPeriod.name = :periodName")
+    long countByPeriodNameForUniversityInitiative(@Param("universityInitiativeId") Long universityInitiativeId,
+                                                   @Param("periodName") String periodName);
+
     @Query("SELECT a FROM Achievement a WHERE a.measurement.initiative.id IN " +
            "(SELECT im.deptInitiative.id FROM InitiativeMapping im WHERE im.universityInitiative.id = :universityInitiativeId) " +
            "ORDER BY a.recordedAt DESC")
     List<Achievement> findAggregatedByUniversityInitiativeId(@Param("universityInitiativeId") Long universityInitiativeId);
+
+    @Query("SELECT a FROM Achievement a WHERE a.measurement.initiative.id = :baseInitiativeId " +
+           "OR a.measurement.initiative.sourceInitiative.id = :baseInitiativeId " +
+           "ORDER BY a.recordedAt DESC")
+    List<Achievement> findByBaseInitiativeIdAcrossYears(@Param("baseInitiativeId") Long baseInitiativeId);
+
+    @Query("SELECT COUNT(a) FROM Achievement a WHERE a.measurement.initiative.id = :baseInitiativeId " +
+           "OR a.measurement.initiative.sourceInitiative.id = :baseInitiativeId")
+    long countByBaseInitiativeIdAcrossYears(@Param("baseInitiativeId") Long baseInitiativeId);
+
+    @Query("SELECT a FROM Achievement a WHERE " +
+           "(a.measurement.initiative.id = :baseInitiativeId OR a.measurement.initiative.sourceInitiative.id = :baseInitiativeId) " +
+           "AND a.assessmentPeriod.name = :periodName ORDER BY a.recordedAt DESC")
+    List<Achievement> findByBaseInitiativeIdAcrossYearsAndPeriodName(@Param("baseInitiativeId") Long baseInitiativeId,
+                                                                      @Param("periodName") String periodName);
+
+    @Query("SELECT COUNT(a) FROM Achievement a WHERE " +
+           "(a.measurement.initiative.id = :baseInitiativeId OR a.measurement.initiative.sourceInitiative.id = :baseInitiativeId) " +
+           "AND a.assessmentPeriod.name = :periodName")
+    long countByBaseInitiativeIdAcrossYearsAndPeriodName(@Param("baseInitiativeId") Long baseInitiativeId,
+                                                          @Param("periodName") String periodName);
 
     @Query("SELECT COUNT(a) FROM Achievement a WHERE a.measurement.initiative.id IN " +
            "(SELECT im.deptInitiative.id FROM InitiativeMapping im WHERE im.universityInitiative.id = :universityInitiativeId)")

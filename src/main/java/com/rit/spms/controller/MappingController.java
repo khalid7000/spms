@@ -28,12 +28,16 @@ public class MappingController {
                 mappingService.getCoverageReport(strategyId, principal.getId())));
     }
 
-    @GetMapping("/planning-cycles/{cycleId}/university-objectives")
+    // Scoped by the CALLING department strategy (not the planning cycle directly) so the
+    // permission check is against a strategy the caller actually has a role on -- a department
+    // editor mapping their own objectives has no reason to hold any role on the university
+    // strategy itself.
+    @GetMapping("/strategies/{deptStrategyId}/university-objectives")
     public ResponseEntity<ApiResponse<List<ObjectiveResponse>>> getUniversityObjectives(
-            @PathVariable Long cycleId,
+            @PathVariable Long deptStrategyId,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                mappingService.getAvailableUniversityObjectives(cycleId, principal.getId())));
+                mappingService.getAvailableUniversityObjectives(deptStrategyId, principal.getId())));
     }
 
     @GetMapping("/objectives/{deptObjectiveId}/available-university-initiatives")

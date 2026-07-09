@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.util.Date;
 
+/** Issues/validates JWTs. Only carries userId + email as claims -- authorization is re-derived from the DB per request (see JwtAuthenticationFilter), not trusted from the token. */
 @Component
 @Slf4j
 public class JwtTokenProvider {
@@ -33,7 +34,6 @@ public class JwtTokenProvider {
         return Jwts.builder()
                 .subject(userPrincipal.getEmail())
                 .claim("userId", userPrincipal.getId())
-                .claim("isAdmin", userPrincipal.getIsAdmin())
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(getSigningKey())

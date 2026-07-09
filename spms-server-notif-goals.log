@@ -1,0 +1,104 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ----------------------------< com.rit:spms >----------------------------
+[INFO] Building spms 1.0.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] >>> spring-boot:3.3.0:run (default-cli) > test-compile @ spms >>>
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ spms ---
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] Copying 54 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ spms ---
+[INFO] Recompiling the module because of added or removed source files.
+[INFO] Compiling 258 source files with javac [debug parameters release 21] to target\classes
+[INFO] Annotation processing is enabled because one or more processors were found
+  on the class path. A future release of javac may disable annotation processing
+  unless at least one processor is specified by name (-processor), or a search
+  path is specified (--processor-path, --processor-module-path), or annotation
+  processing is enabled explicitly (-proc:only, -proc:full).
+  Use -Xlint:-options to suppress this message.
+  Use -proc:none to disable annotation processing.
+[WARNING] /C:/Users/kxkcad/projects/demo/spms/src/main/java/com/rit/spms/domain/Measurement.java:[42,21] @Builder will ignore the initializing expression entirely. If you want the initializing expression to serve as default, add @Builder.Default. If it is not supposed to be settable during building, make the field final.
+[WARNING] /C:/Users/kxkcad/projects/demo/spms/src/main/java/com/rit/spms/domain/Department.java:[30,21] @Builder will ignore the initializing expression entirely. If you want the initializing expression to serve as default, add @Builder.Default. If it is not supposed to be settable during building, make the field final.
+[WARNING] /C:/Users/kxkcad/projects/demo/spms/src/main/java/com/rit/spms/domain/Objective.java:[34,21] @Builder will ignore the initializing expression entirely. If you want the initializing expression to serve as default, add @Builder.Default. If it is not supposed to be settable during building, make the field final.
+[WARNING] /C:/Users/kxkcad/projects/demo/spms/src/main/java/com/rit/spms/domain/Objective.java:[37,21] @Builder will ignore the initializing expression entirely. If you want the initializing expression to serve as default, add @Builder.Default. If it is not supposed to be settable during building, make the field final.
+[WARNING] /C:/Users/kxkcad/projects/demo/spms/src/main/java/com/rit/spms/domain/Goal.java:[42,21] @Builder will ignore the initializing expression entirely. If you want the initializing expression to serve as default, add @Builder.Default. If it is not supposed to be settable during building, make the field final.
+[WARNING] /C:/Users/kxkcad/projects/demo/spms/src/main/java/com/rit/spms/domain/AppUser.java:[55,21] @Builder will ignore the initializing expression entirely. If you want the initializing expression to serve as default, add @Builder.Default. If it is not supposed to be settable during building, make the field final.
+[WARNING] /C:/Users/kxkcad/projects/demo/spms/src/main/java/com/rit/spms/domain/AssessmentPeriod.java:[35,21] @Builder will ignore the initializing expression entirely. If you want the initializing expression to serve as default, add @Builder.Default. If it is not supposed to be settable during building, make the field final.
+[WARNING] /C:/Users/kxkcad/projects/demo/spms/src/main/java/com/rit/spms/domain/Initiative.java:[35,21] @Builder will ignore the initializing expression entirely. If you want the initializing expression to serve as default, add @Builder.Default. If it is not supposed to be settable during building, make the field final.
+[WARNING] /C:/Users/kxkcad/projects/demo/spms/src/main/java/com/rit/spms/domain/AchievementType.java:[23,21] @Builder will ignore the initializing expression entirely. If you want the initializing expression to serve as default, add @Builder.Default. If it is not supposed to be settable during building, make the field final.
+[WARNING] /C:/Users/kxkcad/projects/demo/spms/src/main/java/com/rit/spms/domain/PlanningCycle.java:[33,21] @Builder will ignore the initializing expression entirely. If you want the initializing expression to serve as default, add @Builder.Default. If it is not supposed to be settable during building, make the field final.
+[WARNING] /C:/Users/kxkcad/projects/demo/spms/src/main/java/com/rit/spms/domain/Theme.java:[23,21] @Builder will ignore the initializing expression entirely. If you want the initializing expression to serve as default, add @Builder.Default. If it is not supposed to be settable during building, make the field final.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ spms ---
+[INFO] skip non existing resourceDirectory C:\Users\kxkcad\projects\demo\spms\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ spms ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] <<< spring-boot:3.3.0:run (default-cli) < test-compile @ spms <<<
+[INFO] 
+[INFO] 
+[INFO] --- spring-boot:3.3.0:run (default-cli) @ spms ---
+[INFO] Attaching agents: []
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.0)
+
+2026-07-06T23:43:01.845+04:00  INFO 48676 --- [           main] com.rit.spms.SpmsApplication             : Starting SpmsApplication using Java 21.0.8 with PID 48676 (C:\Users\kxkcad\projects\demo\spms\target\classes started by kxkcad in C:\Users\kxkcad\projects\demo\spms)
+2026-07-06T23:43:01.850+04:00  INFO 48676 --- [           main] com.rit.spms.SpmsApplication             : No active profile set, falling back to 1 default profile: "default"
+2026-07-06T23:43:02.764+04:00  INFO 48676 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-07-06T23:43:02.951+04:00  INFO 48676 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 173 ms. Found 46 JPA repository interfaces.
+2026-07-06T23:43:04.182+04:00  INFO 48676 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8085 (http)
+2026-07-06T23:43:04.201+04:00  INFO 48676 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-07-06T23:43:04.202+04:00  INFO 48676 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.24]
+2026-07-06T23:43:04.282+04:00  INFO 48676 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-07-06T23:43:04.284+04:00  INFO 48676 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 2371 ms
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+2026-07-06T23:43:04.562+04:00  INFO 48676 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-07-06T23:43:04.836+04:00  INFO 48676 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@379f9555
+2026-07-06T23:43:04.840+04:00  INFO 48676 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-07-06T23:43:04.878+04:00  INFO 48676 --- [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5432/spms (PostgreSQL 17.6)
+2026-07-06T23:43:04.894+04:00  WARN 48676 --- [           main] o.f.c.internal.database.base.Database    : Flyway upgrade recommended: PostgreSQL 17.6 is newer than this version of Flyway and support has not been tested. The latest supported version of PostgreSQL is 16.
+2026-07-06T23:43:05.019+04:00  INFO 48676 --- [           main] o.f.core.internal.command.DbValidate     : Successfully validated 54 migrations (execution time 00:00.097s)
+2026-07-06T23:43:05.065+04:00  INFO 48676 --- [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 52
+2026-07-06T23:43:05.089+04:00  INFO 48676 --- [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "53 - notification generalize"
+2026-07-06T23:43:05.136+04:00  INFO 48676 --- [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "54 - annual evaluation goals nothing to report"
+2026-07-06T23:43:05.167+04:00  INFO 48676 --- [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 2 migrations to schema "public", now at version v54 (execution time 00:00.042s)
+2026-07-06T23:43:05.288+04:00  INFO 48676 --- [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-07-06T23:43:05.399+04:00  INFO 48676 --- [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.5.2.Final
+2026-07-06T23:43:05.483+04:00  INFO 48676 --- [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-07-06T23:43:06.100+04:00  INFO 48676 --- [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-07-06T23:43:06.202+04:00  WARN 48676 --- [           main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-07-06T23:43:08.248+04:00  INFO 48676 --- [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-07-06T23:43:08.309+04:00  INFO 48676 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-07-06T23:43:08.687+04:00  INFO 48676 --- [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-07-06T23:43:10.393+04:00  INFO 48676 --- [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name hybridAuthenticationProvider
+2026-07-06T23:43:10.397+04:00  WARN 48676 --- [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used for username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider.
+2026-07-06T23:43:11.811+04:00  WARN 48676 --- [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-07-06T23:43:12.233+04:00  INFO 48676 --- [           main] o.s.s.web.DefaultSecurityFilterChain     : Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@1b618413, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@60285daa, org.springframework.security.web.context.SecurityContextHolderFilter@65fdd81d, org.springframework.security.web.header.HeaderWriterFilter@1aad8ce5, org.springframework.web.filter.CorsFilter@2b97a1fb, org.springframework.security.web.authentication.logout.LogoutFilter@34480422, com.rit.spms.security.JwtAuthenticationFilter@ebbe9f3, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@3b7db502, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@44707383, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@14680d29, org.springframework.security.web.session.SessionManagementFilter@4398e224, org.springframework.security.web.access.ExceptionTranslationFilter@281f19e3, org.springframework.security.web.access.intercept.AuthorizationFilter@6333003d]
+2026-07-06T23:43:12.649+04:00  INFO 48676 --- [           main] o.s.l.c.support.AbstractContextSource    : Property 'userDn' not set - anonymous context will be used for read-only operations
+2026-07-06T23:43:12.766+04:00  INFO 48676 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8085 (http) with context path '/'
+2026-07-06T23:43:12.776+04:00  INFO 48676 --- [           main] com.rit.spms.SpmsApplication             : Started SpmsApplication in 11.454 seconds (process running for 11.95)
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  10:24 min
+[INFO] Finished at: 2026-07-06T23:53:11+04:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:3.3.0:run (default-cli) on project spms: Process terminated with exit code: -1 -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

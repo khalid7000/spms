@@ -26,4 +26,9 @@ public interface InitiativeRepository extends JpaRepository<Initiative, Long> {
 
     @Query("SELECT i FROM Initiative i WHERE i.objective.goal.strategy.id = :strategyId ORDER BY i.sortOrder")
     List<Initiative> findByStrategyId(@Param("strategyId") Long strategyId);
+
+    // Used to check whether a strategy already has year-specific initiative copies for a given
+    // academic year, so backfilling on late deployment doesn't create duplicates.
+    @Query("SELECT COUNT(i) > 0 FROM Initiative i WHERE i.objective.goal.strategy.id = :strategyId AND i.academicYear.id = :academicYearId")
+    boolean existsByStrategyIdAndAcademicYearId(@Param("strategyId") Long strategyId, @Param("academicYearId") Long academicYearId);
 }

@@ -3,11 +3,13 @@ package com.rit.spms.service;
 import com.rit.spms.domain.*;
 import com.rit.spms.domain.enums.RoleType;
 import com.rit.spms.domain.enums.StrategyState;
+import com.rit.spms.domain.enums.StrategyType;
 import com.rit.spms.dto.response.ApprovalRequestResponse;
 import com.rit.spms.exception.BusinessRuleException;
 import com.rit.spms.exception.ResourceNotFoundException;
 import com.rit.spms.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +25,8 @@ public class ApprovalService {
     private final StrategyRepository strategyRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final AppUserRepository appUserRepository;
+    private final ApplicationEventPublisher eventPublisher;
+    private final AcademicYearService academicYearService;
 
     /**
      * Called when an owner requests deployment.
@@ -36,9 +40,15 @@ public class ApprovalService {
         List<StrategyApproval> chain = buildApprovalChain(strategy, owner);
         if (chain.isEmpty()) {
             strategy.setState(StrategyState.DEPLOYED);
+            academicYearService.backfillInitiativeCopiesForNewlyDeployedStrategy(strategy);
         } else {
             approvalRepository.saveAll(chain);
             strategy.setState(StrategyState.APPROVAL_PENDING);
+            // Every approver in the chain can act immediately (approval isn't sequential -- see
+            // `approve()`'s allMatch check), so notify all of them now rather than one at a time.
+            for (StrategyApproval approval : chain) {
+                eventPublisher.publishEvent(new StrategyApprovalPendingEvent(strategy.getId(), approval.getRequiredApprover().getId()));
+            }
         }
         strategyRepository.save(strategy);
     }
@@ -68,6 +78,7 @@ public class ApprovalService {
         if (allApproved) {
             strategy.setState(StrategyState.DEPLOYED);
             strategyRepository.save(strategy);
+            academicYearService.backfillInitiativeCopiesForNewlyDeployedStrategy(strategy);
         }
     }
 
@@ -96,6 +107,13 @@ public class ApprovalService {
     // ── helpers ────────────────────────────────────────────────────────────────
 
     private List<StrategyApproval> buildApprovalChain(Strategy strategy, AppUser owner) {
+        // A university-wide plan isn't owned by any one department, so it doesn't make sense to
+        // route it through the owner's own personal department chair/dean -- only the single
+        // authority at the top of the org hierarchy (e.g. the Provost) is required.
+        if (strategy.getStrategyType() == StrategyType.UNIVERSITY) {
+            return buildTopOfHierarchyChain(strategy, owner);
+        }
+
         List<StrategyApproval> chain = new ArrayList<>();
         Set<Long> seen = new LinkedHashSet<>();   // dedup: same user can't appear twice
         int order = 1;
@@ -119,6 +137,23 @@ public class ApprovalService {
         }
 
         return chain;
+    }
+
+    /** Walks up from the owner's department to the root OrgGroup (no parent) and requires only its head. */
+    private List<StrategyApproval> buildTopOfHierarchyChain(Strategy strategy, AppUser owner) {
+        Department dept = owner.getDepartment();
+        OrgGroup group = dept != null ? dept.getOrgGroup() : null;
+        OrgGroup root = null;
+        while (group != null) {
+            root = group;
+            group = group.getParent();
+        }
+
+        if (root == null || root.getHead() == null) {
+            return new ArrayList<>();
+        }
+        String label = root.getHeadTitle() + ", " + root.getTitle();
+        return new ArrayList<>(List.of(buildRecord(strategy, root.getHead(), label, 1)));
     }
 
     private StrategyApproval buildRecord(Strategy strategy, AppUser approver,

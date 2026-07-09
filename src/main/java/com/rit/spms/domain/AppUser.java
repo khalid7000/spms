@@ -1,12 +1,20 @@
 package com.rit.spms.domain;
 
+import com.rit.spms.domain.enums.SystemRole;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
+/**
+ * A system user. Every user is implicitly an "Employee" (can own/edit/view strategies, has a
+ * portfolio) -- that base capability isn't stored here. {@link #systemRoles} layers on top of it:
+ * ADMIN and/or HR, any combination, controlling console visibility and elevated permissions.
+ */
 @Entity
 @Table(name = "app_user")
 @Getter
@@ -36,8 +44,12 @@ public class AppUser {
     @JoinColumn(name = "department_id")
     private Department department;
 
-    @Column(name = "is_admin", nullable = false)
-    private Boolean isAdmin = false;
+    @ElementCollection(targetClass = SystemRole.class, fetch = FetchType.EAGER)
+    @CollectionTable(name = "app_user_system_role", joinColumns = @JoinColumn(name = "user_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, length = 20)
+    @Builder.Default
+    private Set<SystemRole> systemRoles = new HashSet<>();
 
     @Column(nullable = false)
     private Boolean active = true;
@@ -56,4 +68,8 @@ public class AppUser {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    public boolean hasRole(SystemRole role) {
+        return systemRoles != null && systemRoles.contains(role);
+    }
 }

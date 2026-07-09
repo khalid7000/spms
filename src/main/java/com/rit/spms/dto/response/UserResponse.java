@@ -2,11 +2,14 @@ package com.rit.spms.dto.response;
 
 import com.rit.spms.domain.AppUser;
 import com.rit.spms.domain.Department;
+import com.rit.spms.domain.enums.SystemRole;
 import lombok.Builder;
 import lombok.Value;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
+/** AppUser projection returned by the admin user-management endpoints, including {@link SystemRole}s (not the boolean isAdmin flag it replaced). */
 @Value
 @Builder
 public class UserResponse {
@@ -17,7 +20,7 @@ public class UserResponse {
     String email;
     String title;
     DeptInfo department;
-    Boolean isAdmin;
+    Set<SystemRole> systemRoles;
     Boolean active;
     Boolean mustChangePassword;
     LocalDateTime createdAt;
@@ -31,7 +34,7 @@ public class UserResponse {
                 .email(user.getEmail())
                 .title(user.getTitle())
                 .department(dept == null ? null : new DeptInfo(dept.getId(), dept.getName(), dept.getCode()))
-                .isAdmin(user.getIsAdmin())
+                .systemRoles(user.getSystemRoles())
                 .active(user.getActive())
                 .mustChangePassword(user.getMustChangePassword())
                 .createdAt(user.getCreatedAt())

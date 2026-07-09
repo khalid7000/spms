@@ -14,11 +14,13 @@ import com.rit.spms.exception.ResourceNotFoundException;
 import com.rit.spms.exception.StrategyIncompleteException;
 import com.rit.spms.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -39,11 +41,20 @@ public class StrategyService {
     private final VisionAreaRepository visionAreaRepository;
     private final AchievementRepository achievementRepository;
     private final AssessmentPeriodRepository assessmentPeriodRepository;
+    private final AcademicYearRepository academicYearRepository;
     private final PermissionService permissionService;
     private final AuditService auditService;
     private final ApprovalService approvalService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final NotificationRepository notificationRepository;
+
+    private static final List<com.rit.spms.domain.enums.NotificationType> STRATEGY_NOTIFICATION_TYPES = List.of(
+            com.rit.spms.domain.enums.NotificationType.STRATEGY_MEMBERSHIP,
+            com.rit.spms.domain.enums.NotificationType.STRATEGY_APPROVAL,
+            com.rit.spms.domain.enums.NotificationType.SWOT_INVITE);
 
     public Strategy createUniversityStrategy(CreateStrategyRequest req, Long currentUserId) {
+        permissionService.assertCanCreateUniversityStrategy(currentUserId);
         PlanningCycle cycle = planningCycleRepository.findById(req.getPlanningCycleId())
                 .orElseThrow(() -> new ResourceNotFoundException("PlanningCycle", req.getPlanningCycleId()));
 
@@ -76,6 +87,7 @@ public class StrategyService {
     }
 
     public Strategy createDepartmentStrategy(CreateStrategyRequest req, Long currentUserId) {
+        permissionService.assertCanCreateDepartmentStrategy(currentUserId, req.getDepartmentId());
         PlanningCycle cycle = planningCycleRepository.findById(req.getPlanningCycleId())
                 .orElseThrow(() -> new ResourceNotFoundException("PlanningCycle", req.getPlanningCycleId()));
         Department dept = departmentRepository.findById(req.getDepartmentId())
@@ -240,6 +252,7 @@ public class StrategyService {
             RoleAssignment saved = roleAssignmentRepository.save(existing);
             auditService.log(currentUser, "ASSIGN_ROLE", "RoleAssignment", saved.getId(), strategy,
                     "Assigned role " + req.getRole() + " to user " + targetUser.getEmail());
+            notifyMemberAdded(strategy, targetUser, req.getRole(), currentUserId);
             return saved;
         }
 
@@ -251,7 +264,15 @@ public class StrategyService {
         assignment = roleAssignmentRepository.save(assignment);
         auditService.log(currentUser, "ASSIGN_ROLE", "RoleAssignment", assignment.getId(), strategy,
                 "Assigned role " + req.getRole() + " to user " + targetUser.getEmail());
+        notifyMemberAdded(strategy, targetUser, req.getRole(), currentUserId);
         return assignment;
+    }
+
+    /** Skips self-notification (a user changing their own role, e.g. via the admin console). */
+    private void notifyMemberAdded(Strategy strategy, AppUser targetUser, RoleType role, Long currentUserId) {
+        if (!targetUser.getId().equals(currentUserId)) {
+            eventPublisher.publishEvent(new StrategyMemberAddedEvent(strategy.getId(), targetUser.getId(), role.name()));
+        }
     }
 
     @Transactional(readOnly = true)
@@ -304,6 +325,67 @@ public class StrategyService {
         List<RoleAssignment> assignments = roleAssignmentRepository.findByUserId(currentUserId);
         return assignments.stream().map(ra -> {
             Strategy s = ra.getStrategy();
+            Long strategyId = s.getId();
+
+            int involvedUserCount = roleAssignmentRepository.findByStrategyId(strategyId).size();
+            int unreadNotificationCount = (int) notificationRepository.countByRecipientIdAndEntityIdAndIsReadFalseAndTypeIn(
+                    currentUserId, strategyId, STRATEGY_NOTIFICATION_TYPES);
+
+            List<Goal> goals = goalRepository.findByStrategyIdOrderBySortOrder(strategyId);
+            List<Objective> objectives = objectiveRepository.findByStrategyId(strategyId);
+            boolean isUniversity = s.getStrategyType() == StrategyType.UNIVERSITY;
+            int threshold = s.getAchievementThreshold() != null ? s.getAchievementThreshold() : 3;
+
+            // "On track" mirrors StrategySummaryChart.jsx's goalsOnTrack/objOnTrack exactly -- scoped to the
+            // strategy's most recent assessment period (by end date), not an all-time total, so this stays in
+            // sync with whatever the Report tab shows when a user opens it.
+            List<AssessmentPeriod> periods = assessmentPeriodRepository
+                    .findByPlanningCycleIdOrderBySortOrder(s.getPlanningCycle().getId());
+            AssessmentPeriod mostRecent = periods.stream()
+                    .max(java.util.Comparator.comparing(AssessmentPeriod::getEndDate))
+                    .orElse(null);
+
+            // Base initiatives only (never a mix of base + year-copies) -- an initiative that's been
+            // frozen for a year still has exactly ONE canonical identity here; periodAchievementCount
+            // below unions achievements across all of its year-copies rather than treating each copy
+            // as a separate initiative, which would otherwise double-count / falsely dilute the color.
+            Map<Long, List<Initiative>> initiativesByObjectiveId = new java.util.HashMap<>();
+            for (Objective o : objectives) {
+                initiativesByObjectiveId.put(o.getId(), initiativeRepository.findByObjectiveIdAndAcademicYearIsNullOrderBySortOrder(o.getId()));
+            }
+
+            int objectivesOnTrack = 0;
+            int goalsOnTrack = 0;
+            if (mostRecent != null) {
+                for (Objective o : objectives) {
+                    List<Initiative> initiatives = initiativesByObjectiveId.get(o.getId());
+                    if (initiatives.isEmpty()) {
+                        continue;
+                    }
+                    List<String> colors = initiatives.stream()
+                            .map(ini -> initiativeAchievementColor(periodAchievementCount(ini, isUniversity, mostRecent), threshold))
+                            .toList();
+                    if ("green".equals(rollupAchievementColor(colors))) {
+                        objectivesOnTrack++;
+                    }
+                }
+                for (Goal g : goals) {
+                    List<Initiative> allInitiatives = objectives.stream()
+                            .filter(o -> o.getGoal().getId().equals(g.getId()))
+                            .flatMap(o -> initiativesByObjectiveId.get(o.getId()).stream())
+                            .toList();
+                    if (allInitiatives.isEmpty()) {
+                        continue;
+                    }
+                    List<String> colors = allInitiatives.stream()
+                            .map(ini -> initiativeAchievementColor(periodAchievementCount(ini, isUniversity, mostRecent), threshold))
+                            .toList();
+                    if ("green".equals(rollupAchievementColor(colors))) {
+                        goalsOnTrack++;
+                    }
+                }
+            }
+
             return DashboardResponse.builder()
                     .strategyId(s.getId())
                     .strategyTitle(s.getTitle())
@@ -312,8 +394,36 @@ public class StrategyService {
                     .role(ra.getRole())
                     .planningCycleName(s.getPlanningCycle().getName())
                     .departmentName(s.getDepartment() != null ? s.getDepartment().getName() : null)
+                    .involvedUserCount(involvedUserCount)
+                    .unreadNotificationCount(unreadNotificationCount)
+                    .totalGoals(goals.size())
+                    .goalsOnTrack(goalsOnTrack)
+                    .totalObjectives(objectives.size())
+                    .objectivesOnTrack(objectivesOnTrack)
+                    .mostRecentPeriodName(mostRecent != null ? mostRecent.getName() : null)
                     .build();
         }).toList();
+    }
+
+    private long periodAchievementCount(Initiative initiative, boolean isUniversity, AssessmentPeriod period) {
+        return isUniversity
+                ? achievementRepository.countByPeriodNameForUniversityInitiative(initiative.getId(), period.getName())
+                : achievementRepository.countByBaseInitiativeIdAcrossYearsAndAssessmentPeriodId(initiative.getId(), period.getId());
+    }
+
+    /** Mirrors ReportPage.jsx's initiativeColor. */
+    private static String initiativeAchievementColor(long count, int threshold) {
+        if (count == 0) return "red";
+        if (count >= threshold) return "green";
+        return "amber";
+    }
+
+    /** Mirrors ReportPage.jsx's rollupColor -- an objective/goal is green only if every initiative under it is green. */
+    private static String rollupAchievementColor(List<String> colors) {
+        if (colors.isEmpty()) return "amber";
+        if (colors.stream().allMatch("green"::equals)) return "green";
+        if (colors.stream().allMatch("red"::equals)) return "red";
+        return "amber";
     }
 
     public Strategy setThreshold(Long strategyId, SetThresholdRequest req, Long currentUserId) {
@@ -403,12 +513,30 @@ public class StrategyService {
         // University-strategy initiatives are structural (academic_year_id IS NULL).
         // Never filter them by academic year — the year selector only affects dept breakdowns.
         boolean isUniversityObj = objective.getGoal().getStrategy().getStrategyType() == StrategyType.UNIVERSITY;
-        List<Initiative> rawInitiatives = (academicYearId != null && !isUniversityObj)
+        List<Initiative> yearScoped = (academicYearId != null && !isUniversityObj)
                 ? initiativeRepository.findByObjectiveIdAndAcademicYearIdOrderBySortOrder(objective.getId(), academicYearId)
-                : initiativeRepository.findByObjectiveIdAndAcademicYearIsNullOrderBySortOrder(objective.getId());
+                : null;
 
+        // A requested year with no frozen copies for this objective isn't "nothing to show" -- it
+        // means this strategy/objective was never actually frozen for that year. Fall back to the
+        // Base Plan structure, filtered to just that year's matching achievements (by name), so the
+        // selector still narrows results the way a user expects instead of showing an empty tree.
+        String fallbackPeriodName = null;
+        List<Initiative> rawInitiatives;
+        if (yearScoped != null) {
+            if (!yearScoped.isEmpty()) {
+                rawInitiatives = yearScoped;
+            } else {
+                rawInitiatives = initiativeRepository.findByObjectiveIdAndAcademicYearIsNullOrderBySortOrder(objective.getId());
+                fallbackPeriodName = academicYearRepository.findById(academicYearId).map(AcademicYear::getName).orElse(null);
+            }
+        } else {
+            rawInitiatives = initiativeRepository.findByObjectiveIdAndAcademicYearIsNullOrderBySortOrder(objective.getId());
+        }
+
+        String periodFilter = fallbackPeriodName;
         List<InitiativeResponse> initiatives = rawInitiatives
-                .stream().map(this::buildInitiativeResponse).toList();
+                .stream().map(ini -> buildInitiativeResponse(ini, periodFilter)).toList();
 
         return ObjectiveResponse.builder()
                 .id(objective.getId())
@@ -425,14 +553,25 @@ public class StrategyService {
                 .build();
     }
 
-    private InitiativeResponse buildInitiativeResponse(Initiative initiative) {
+    private InitiativeResponse buildInitiativeResponse(Initiative initiative, String fallbackPeriodNameFilter) {
         Initiative univInit = initiativeMappingRepository.findByDeptInitiativeId(initiative.getId())
                 .map(im -> im.getUniversityInitiative())
                 .orElse(null);
         Long univInitId = univInit != null ? univInit.getId() : null;
         String univInitTitle = univInit != null ? univInit.getTitle() : null;
 
-        long achievementCount = achievementRepository.countByMeasurementInitiativeId(initiative.getId());
+        // A base initiative (no academic year) rarely accumulates achievements of its own going
+        // forward -- those get recorded against a specific year's copy instead (see
+        // AcademicYearService.copyForStrategy). Count the union of the base row's own achievements
+        // plus every year-copy's, so the Base Plan view doesn't look empty just because the real
+        // achievements live under a year that isn't currently selected. When standing in for a
+        // requested year that was never frozen (fallbackPeriodNameFilter set), narrow that union to
+        // just the matching period's achievements instead of showing every year combined.
+        long achievementCount = initiative.getAcademicYear() == null
+                ? (fallbackPeriodNameFilter != null
+                    ? achievementRepository.countByBaseInitiativeIdAcrossYearsAndPeriodName(initiative.getId(), fallbackPeriodNameFilter)
+                    : achievementRepository.countByBaseInitiativeIdAcrossYears(initiative.getId()))
+                : achievementRepository.countByMeasurementInitiativeId(initiative.getId());
 
         boolean isUniversity = initiative.getObjective().getGoal().getStrategy().getStrategyType() == StrategyType.UNIVERSITY;
         long mappedAchievementCount = 0;
@@ -476,6 +615,7 @@ public class StrategyService {
                 .universityInitiativeId(univInitId)
                 .universityInitiativeTitle(univInitTitle)
                 .academicYearId(initiative.getAcademicYear() != null ? initiative.getAcademicYear().getId() : null)
+                .assessmentPeriodName(fallbackPeriodNameFilter)
                 .hasAchievements(achievementCount > 0)
                 .achievementCount(achievementCount)
                 .mappedAchievementCount(mappedAchievementCount)

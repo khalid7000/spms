@@ -16,4 +16,11 @@ public class DashboardResponse {
     private RoleType role;
     private String planningCycleName;
     private String departmentName;
+    private int involvedUserCount;
+    private int unreadNotificationCount;
+    private int totalGoals;
+    private int goalsOnTrack;
+    private int totalObjectives;
+    private int objectivesOnTrack;
+    private String mostRecentPeriodName;
 }

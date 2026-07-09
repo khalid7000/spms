@@ -1,6 +1,7 @@
 package com.rit.spms.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -11,4 +12,6 @@ public class CreateAcademicYearRequest {
     private String name;
     private LocalDate startDate;
     private LocalDate endDate;
+    @NotNull(message = "A university-level strategy must be selected")
+    private Long universityStrategyId;
 }

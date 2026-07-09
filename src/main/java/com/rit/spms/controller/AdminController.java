@@ -3,11 +3,14 @@ package com.rit.spms.controller;
 import com.rit.spms.domain.*;
 import com.rit.spms.domain.enums.StrategyState;
 import com.rit.spms.domain.enums.StrategyType;
+import com.rit.spms.domain.enums.SystemRole;
 import com.rit.spms.dto.request.RoleAssignmentRequest;
 import com.rit.spms.dto.response.*;
 
 import com.rit.spms.security.UserPrincipal;
+import com.rit.spms.service.AchievementService;
 import com.rit.spms.service.AdminService;
+import com.rit.spms.service.AnnualEvaluationService;
 import com.rit.spms.service.CsvImportService;
 import com.rit.spms.service.StrategyService;
 import jakarta.validation.Valid;
@@ -26,7 +29,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
+/** Admin console REST surface (users/roles, org groups, departments, planning cycles, achievement types, audit log) -- ADMIN role required for all of it. */
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
@@ -36,6 +41,8 @@ public class AdminController {
     private final AdminService adminService;
     private final CsvImportService csvImportService;
     private final StrategyService strategyService;
+    private final AchievementService achievementService;
+    private final AnnualEvaluationService annualEvaluationService;
 
     // --- Org Groups ---
 
@@ -115,7 +122,7 @@ public class AdminController {
     @PostMapping("/users")
     public ResponseEntity<ApiResponse<UserResponse>> createUser(@Valid @RequestBody CreateUserRequest req) {
         UserResponse user = adminService.createUser(req.getFname(), req.getLname(), req.getEmail(),
-                req.getTitle(), req.getDepartmentId(), Boolean.TRUE.equals(req.getIsAdmin()), req.getPassword());
+                req.getTitle(), req.getDepartmentId(), req.getSystemRoles(), req.getPassword());
         return ResponseEntity.status(201).body(ApiResponse.success("User created", user));
     }
 
@@ -123,7 +130,7 @@ public class AdminController {
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(@PathVariable Long id,
                                                                  @Valid @RequestBody UpdateUserRequest req) {
         UserResponse user = adminService.updateUser(id, req.getFname(), req.getLname(),
-                req.getTitle(), req.getDepartmentId(), req.getIsAdmin());
+                req.getTitle(), req.getDepartmentId(), req.getSystemRoles());
         return ResponseEntity.ok(ApiResponse.success(user));
     }
 
@@ -211,6 +218,33 @@ public class AdminController {
     public ResponseEntity<ApiResponse<Void>> deleteAchievementType(@PathVariable Long id) {
         adminService.deleteAchievementType(id);
         return ResponseEntity.ok(ApiResponse.success("Achievement type deactivated", null));
+    }
+
+    // Repair tool: moves an achievement stuck on a "base" (year-less) measurement onto the
+    // year-specific copy matching its own assessment period -- for achievements recorded before a
+    // late strategy deployment triggered the backfill. See AchievementService.relocateToMatchingYear.
+    @PostMapping("/achievements/{id}/relocate-to-year")
+    public ResponseEntity<ApiResponse<Void>> relocateAchievementToYear(@PathVariable Long id) {
+        achievementService.relocateToMatchingYear(id);
+        return ResponseEntity.ok(ApiResponse.success("Achievement moved to its year-specific measurement", null));
+    }
+
+    // Repair tool: an evaluation created before its employee's goal cycle deployed (or before this
+    // backfill existed) never picked up AnnualEvaluationGoalResult rows -- including ones already
+    // CONCLUDED. Safe to re-run; only fills in rows that don't exist yet.
+    @PostMapping("/annual-evaluations/backfill-goal-results")
+    public ResponseEntity<ApiResponse<String>> backfillGoalResults() {
+        int created = annualEvaluationService.backfillAllMissingGoalResults();
+        return ResponseEntity.ok(ApiResponse.success(created + " goal result row(s) backfilled", null));
+    }
+
+    // Repair tool: a self-heading department head's evaluation used to resolve `head` to
+    // themselves (fixed in PermissionService.resolveSupervisor) -- reassigns any such evaluation
+    // still stuck that way to the correctly-resolved org-group-chain supervisor.
+    @PostMapping("/annual-evaluations/repair-self-headed")
+    public ResponseEntity<ApiResponse<String>> repairSelfHeadedEvaluations() {
+        int fixed = annualEvaluationService.repairSelfHeadedEvaluations();
+        return ResponseEntity.ok(ApiResponse.success(fixed + " evaluation(s) reassigned to their correct supervisor", null));
     }
 
     // --- Strategies (admin view) ---
@@ -370,7 +404,7 @@ public class AdminController {
         @NotBlank private String email;
         private String title;
         private Long departmentId;
-        private Boolean isAdmin;
+        private Set<SystemRole> systemRoles;
         private String password;
     }
 
@@ -379,7 +413,7 @@ public class AdminController {
         private String lname;
         private String title;
         private Long departmentId;
-        private Boolean isAdmin;
+        private Set<SystemRole> systemRoles;
     }
 
     @Data public static class PlanningCycleRequest {

@@ -32,7 +32,7 @@ public class AcademicYearController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<AcademicYearResponse>> create(
             @Valid @RequestBody CreateAcademicYearRequest req) {
-        AcademicYear year = academicYearService.create(req.getName(), req.getStartDate(), req.getEndDate());
+        AcademicYear year = academicYearService.create(req.getName(), req.getStartDate(), req.getEndDate(), req.getUniversityStrategyId());
         return ResponseEntity.status(201).body(
                 ApiResponse.success("Academic year created", AcademicYearResponse.from(year)));
     }

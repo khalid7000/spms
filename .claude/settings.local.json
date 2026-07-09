@@ -25,7 +25,10 @@
       "PowerShell(& \"C:\\\\Users\\\\kxkcad\\\\.m2\\\\wrapper\\\\dists\\\\apache-maven-3.9.9\\\\bin\\\\mvn.cmd\" -f \"c:\\\\Users\\\\kxkcad\\\\projects\\\\demo\\\\spms\\\\pom.xml\" clean package -DskipTests -q 2>&1)",
       "PowerShell(if \\($LASTEXITCODE -eq 0\\) { \"BUILD OK\" } else { \"BUILD FAILED\" })",
       "PowerShell(Start-Process java -ArgumentList \"-jar\",\"target\\\\spms-1.0.0.jar\",\"--server.port=8085\" -RedirectStandardOutput \"spms_out.log\" -RedirectStandardError \"spms_err.log\" -WorkingDirectory \"c:\\\\Users\\\\kxkcad\\\\projects\\\\demo\\\\spms\")",
-      "PowerShell(\"Started\")"
+      "PowerShell(\"Started\")",
+      "Bash(./mvnw.cmd -q compile)",
+      "Bash(cmd //c \"mvnw.cmp -q compile\")",
+      "PowerShell(& \"C:\\\\Users\\\\kxkcad\\\\.m2\\\\wrapper\\\\dists\\\\apache-maven-3.9.9\\\\bin\\\\mvn.cmd\" -o -q clean compile > mvn_out2.log 2>&1; \"EXIT:$LASTEXITCODE\"; Get-Content mvn_out2.log -Tail 200)"
     ],
     "additionalDirectories": [
       "c:\\Users\\kxkcad\\projects\\demo\\spms-client\\src\\api",

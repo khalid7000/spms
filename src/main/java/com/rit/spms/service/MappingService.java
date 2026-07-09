@@ -96,12 +96,17 @@ public class MappingService {
                 .build();
     }
 
-    public List<ObjectiveResponse> getAvailableUniversityObjectives(Long planningCycleId, Long currentUserId) {
+    public List<ObjectiveResponse> getAvailableUniversityObjectives(Long deptStrategyId, Long currentUserId) {
+        Strategy deptStrategy = strategyRepository.findById(deptStrategyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Strategy", deptStrategyId));
+        // Check against the department strategy the caller is actually working in, not the
+        // university strategy being browsed -- see the controller-level comment for why.
+        permissionService.assertCanRead(currentUserId, deptStrategyId);
+
+        Long planningCycleId = deptStrategy.getPlanningCycle().getId();
         Strategy univStrategy = strategyRepository.findByPlanningCycleIdAndDepartmentIsNull(planningCycleId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "University strategy for planning cycle " + planningCycleId));
-
-        permissionService.assertCanRead(currentUserId, univStrategy.getId());
 
         List<Goal> goals = goalRepository.findByStrategyIdOrderBySortOrder(univStrategy.getId());
         List<ObjectiveResponse> result = new ArrayList<>();
