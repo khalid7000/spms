@@ -47,9 +47,12 @@ public class AnnualEvaluation {
     @Column(name = "head_overall_rank")
     private Integer headOverallRank;
 
-    /** The head's written comments for the whole Annual Goals section -- one field, parallel to how each category has its own. */
-    @Column(name = "goals_head_comments", columnDefinition = "TEXT")
-    private String goalsHeadComments;
+    /** The head's written comments for the whole Annual Goals section, split into two required parts -- parallel to how each category has its own. */
+    @Column(name = "goals_head_comments_strengths", columnDefinition = "TEXT")
+    private String goalsHeadCommentsStrengths;
+
+    @Column(name = "goals_head_comments_improvements", columnDefinition = "TEXT")
+    private String goalsHeadCommentsImprovements;
 
     /** The employee's 1-5 self-rank for the whole Annual Goals section -- one field, parallel to how each category has its own. */
     @Column(name = "goals_employee_self_rank")
@@ -58,6 +61,25 @@ public class AnnualEvaluation {
     /** The head's 1-5 rank for the whole Annual Goals section -- parallel to headCategoryRank on AnnualEvaluationCategoryResult. */
     @Column(name = "goals_head_rank")
     private Integer goalsHeadRank;
+
+    // ─── Next Cycle Goals: drafted/reviewed during this evaluation, reused later in Team Goal
+    // Setting once concluded (see AnnualEvaluationNextCycleGoal). Notes here mirror
+    // EmployeeGoalCycle.leaderStrengths/leaderWeaknesses -- same purpose, different lifecycle.
+
+    @Column(name = "next_cycle_notes_strengths", columnDefinition = "TEXT")
+    private String nextCycleNotesStrengths;
+
+    @Column(name = "next_cycle_notes_weaknesses", columnDefinition = "TEXT")
+    private String nextCycleNotesWeaknesses;
+
+    @Column(name = "next_cycle_generation_requested_at")
+    private LocalDateTime nextCycleGenerationRequestedAt;
+
+    @Column(name = "next_cycle_generated_at")
+    private LocalDateTime nextCycleGeneratedAt;
+
+    @Column(name = "next_cycle_generation_failure_reason", length = 1000)
+    private String nextCycleGenerationFailureReason;
 
     @Column(name = "employee_submitted_at")
     private LocalDateTime employeeSubmittedAt;

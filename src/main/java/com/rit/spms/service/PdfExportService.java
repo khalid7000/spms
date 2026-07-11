@@ -236,8 +236,12 @@ public class PdfExportService {
                 doc.add(new Paragraph("Self-assessment: " + rankText(titleId, catResult.getEmployeeSelfRank())
                         + "     Head rank: " + rankText(titleId, catResult.getHeadCategoryRank()))
                         .setFontSize(11).setBold().setFontColor(NAVY_MID).setMarginBottom(6));
-                if (catResult.getHeadComments() != null && !catResult.getHeadComments().isBlank()) {
-                    doc.add(new Paragraph("Head comments: " + catResult.getHeadComments())
+                if (catResult.getHeadCommentsStrengths() != null && !catResult.getHeadCommentsStrengths().isBlank()) {
+                    doc.add(new Paragraph("Strengths: " + catResult.getHeadCommentsStrengths())
+                            .setFontSize(9).setItalic().setFontColor(GRAY_TEXT).setMarginBottom(2));
+                }
+                if (catResult.getHeadCommentsImprovements() != null && !catResult.getHeadCommentsImprovements().isBlank()) {
+                    doc.add(new Paragraph("Potential Improvements: " + catResult.getHeadCommentsImprovements())
                             .setFontSize(9).setItalic().setFontColor(GRAY_TEXT).setMarginBottom(6));
                 }
 
@@ -302,8 +306,12 @@ public class PdfExportService {
                                 .setMarginLeft(18).setMarginBottom(2));
                     }
                 }
-                if (evaluation.getGoalsHeadComments() != null && !evaluation.getGoalsHeadComments().isBlank()) {
-                    doc.add(new Paragraph("Head comments: " + evaluation.getGoalsHeadComments())
+                if (evaluation.getGoalsHeadCommentsStrengths() != null && !evaluation.getGoalsHeadCommentsStrengths().isBlank()) {
+                    doc.add(new Paragraph("Strengths: " + evaluation.getGoalsHeadCommentsStrengths())
+                            .setFontSize(9).setItalic().setFontColor(GRAY_TEXT).setMarginBottom(2));
+                }
+                if (evaluation.getGoalsHeadCommentsImprovements() != null && !evaluation.getGoalsHeadCommentsImprovements().isBlank()) {
+                    doc.add(new Paragraph("Potential Improvements: " + evaluation.getGoalsHeadCommentsImprovements())
                             .setFontSize(9).setItalic().setFontColor(GRAY_TEXT).setMarginBottom(6));
                 }
             }

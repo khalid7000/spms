@@ -39,6 +39,7 @@ public class EmployeeGoalCycleService {
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
     private final AnnualEvaluationService annualEvaluationService;
+    private final AnnualEvaluationNextCycleGoalRepository nextCycleGoalRepository;
 
     /**
      * Every active employee across every department this user heads, plus any department head
@@ -90,6 +91,146 @@ public class EmployeeGoalCycleService {
                             null, "Opened goal cycle for " + employee.getFname() + " " + employee.getLname());
                     return saved;
                 });
+    }
+
+    /**
+     * Unused goals drafted and reviewed during a past, now-CONCLUDED Annual Evaluation for this
+     * employee (see AnnualEvaluationNextCycleGoal) -- neither the head nor the employee rejected
+     * them during that evaluation's own review exchange, so they're offered here instead of making
+     * the head retype them. Grouped by source evaluation so the picker can label each group by the
+     * academic year it came from.
+     */
+    public List<AnnualEvaluationNextCycleGoal> findReusableNextCycleGoals(Long employeeId) {
+        return nextCycleGoalRepository.findReusableByEmployeeId(employeeId);
+    }
+
+    /**
+     * Deploys previously-approved Next Cycle Goals directly, skipping the draft/review dance --
+     * they already went through review and approval during the evaluation they came from. Marks
+     * each source row used so it's never offered again.
+     */
+    public EmployeeGoalCycle useNextCycleGoals(Long employeeId, Long academicYearId, List<Long> nextCycleGoalIds, Long currentUserId) {
+        AppUser employee = userRepository.findById(employeeId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", employeeId));
+        AcademicYear academicYear = academicYearRepository.findById(academicYearId)
+                .orElseThrow(() -> new ResourceNotFoundException("AcademicYear", academicYearId));
+        AppUser leader = permissionService.resolveAndAssertCanManageGoalsFor(currentUserId, employee);
+
+        // Merely opening Team Goal Setting for an employee/year with no cycle yet auto-creates an
+        // empty DRAFT row (see GoalSettingPage's auto-createCycle effect) -- that's not "goals",
+        // it's an untouched placeholder, so it shouldn't block reuse. Only a cycle with real content
+        // (past DRAFT, or with notes/suggestions already on it) counts as already having goals.
+        cycleRepository.findByEmployeeIdAndAcademicYearId(employeeId, academicYearId).ifPresent(existing -> {
+            if (!isEmptyDraftCycle(existing)) {
+                throw new BusinessRuleException("A goal cycle already exists for this employee and academic year");
+            }
+            cycleRepository.delete(existing);
+            cycleRepository.flush();
+        });
+        if (nextCycleGoalIds == null || nextCycleGoalIds.isEmpty()) {
+            throw new BusinessRuleException("Select at least one goal to reuse");
+        }
+
+        List<AnnualEvaluationNextCycleGoal> sourceGoals = nextCycleGoalRepository.findAllById(nextCycleGoalIds);
+        if (sourceGoals.size() != nextCycleGoalIds.size()) {
+            throw new BusinessRuleException("One or more selected goals could not be found");
+        }
+        for (AnnualEvaluationNextCycleGoal g : sourceGoals) {
+            if (!g.getEvaluation().getEmployee().getId().equals(employeeId)) {
+                throw new BusinessRuleException("Goal does not belong to this employee");
+            }
+            if (Boolean.TRUE.equals(g.getUsed())) {
+                throw new BusinessRuleException("'" + g.getSuggestedTitle() + "' has already been used for another cycle");
+            }
+        }
+
+        EmployeeGoalCycle cycle = EmployeeGoalCycle.builder()
+                .employee(employee).leader(leader).academicYear(academicYear)
+                .state(EmployeeGoalCycle.CycleState.DEPLOYED)
+                .employeeAcceptedAt(LocalDateTime.now())
+                .build();
+        EmployeeGoalCycle saved = cycleRepository.save(cycle);
+
+        int sortOrder = 0;
+        for (AnnualEvaluationNextCycleGoal g : sourceGoals) {
+            String title = !isBlank(g.getEmployeeEditedTitle()) ? g.getEmployeeEditedTitle()
+                    : !isBlank(g.getLeaderEditedTitle()) ? g.getLeaderEditedTitle()
+                    : g.getSuggestedTitle();
+            String description = g.getEmployeeEditedDescription() != null ? g.getEmployeeEditedDescription()
+                    : g.getLeaderEditedDescription() != null ? g.getLeaderEditedDescription()
+                    : g.getSuggestedDescription();
+
+            goalRepository.save(EmployeeGoal.builder()
+                    .cycle(saved).category(g.getCategory())
+                    .goalTitle(title).description(description)
+                    .rubricUnsatisfactory(g.getRubricUnsatisfactory())
+                    .rubricMeetsExpectations(g.getRubricMeetsExpectations())
+                    .rubricExceedsExpectations(g.getRubricExceedsExpectations())
+                    .employeeActionType(PortfolioReviewActionType.APPROVE_AS_IS)
+                    .employeeReviewedAt(LocalDateTime.now())
+                    .sortOrder(sortOrder++)
+                    .build());
+
+            g.setUsed(true);
+            g.setUsedInCycle(saved);
+            nextCycleGoalRepository.save(g);
+        }
+
+        auditService.log(leader, "USE_NEXT_CYCLE_GOALS", "EmployeeGoalCycle", saved.getId(),
+                null, "Deployed " + sourceGoals.size() + " goal(s) reused from a prior evaluation for "
+                        + employee.getFname() + " " + employee.getLname());
+        annualEvaluationService.backfillGoalResultsForDeployedCycle(saved);
+        eventPublisher.publishEvent(new GoalCycleDeployedEvent(saved.getId(), leader.getId(), employee.getId()));
+        return saved;
+    }
+
+    /**
+     * Batch version of {@link #useNextCycleGoals} -- for every one of this head's direct reports
+     * (see {@link #getDirectReports}, the same list Team Goal Setting's employee dropdown shows),
+     * checks whether they have a concluded evaluation from {@code sourceAcademicYearId} with unused
+     * Next Cycle Goals AND no existing goal cycle yet for {@code targetAcademicYearId}; if both
+     * hold, deploys every eligible goal from that evaluation into a new cycle for the target year,
+     * exactly like the single-employee reuse flow. Employees who already have a cycle for the
+     * target year, or have no eligible goals from the source year, are skipped (not an error) and
+     * reported back so the head can see why each one was or wasn't touched.
+     */
+    public List<BatchReuseOutcome> batchUseNextCycleGoals(Long targetAcademicYearId, Long sourceAcademicYearId, Long currentUserId) {
+        academicYearRepository.findById(targetAcademicYearId)
+                .orElseThrow(() -> new ResourceNotFoundException("AcademicYear", targetAcademicYearId));
+        academicYearRepository.findById(sourceAcademicYearId)
+                .orElseThrow(() -> new ResourceNotFoundException("AcademicYear", sourceAcademicYearId));
+
+        List<BatchReuseOutcome> results = new ArrayList<>();
+        for (AppUser employee : getDirectReports(currentUserId)) {
+            boolean hasRealCycle = cycleRepository.findByEmployeeIdAndAcademicYearId(employee.getId(), targetAcademicYearId)
+                    .filter(c -> !isEmptyDraftCycle(c))
+                    .isPresent();
+            if (hasRealCycle) {
+                results.add(new BatchReuseOutcome(employee, BatchReuseOutcome.Status.ALREADY_HAS_GOALS, 0, null));
+                continue;
+            }
+            List<AnnualEvaluationNextCycleGoal> candidates =
+                    nextCycleGoalRepository.findReusableByEmployeeIdAndSourceAcademicYearId(employee.getId(), sourceAcademicYearId);
+            if (candidates.isEmpty()) {
+                results.add(new BatchReuseOutcome(employee, BatchReuseOutcome.Status.NO_ELIGIBLE_GOALS, 0, null));
+                continue;
+            }
+            List<Long> ids = candidates.stream().map(AnnualEvaluationNextCycleGoal::getId).toList();
+            EmployeeGoalCycle cycle = useNextCycleGoals(employee.getId(), targetAcademicYearId, ids, currentUserId);
+            results.add(new BatchReuseOutcome(employee, BatchReuseOutcome.Status.DEPLOYED, candidates.size(), cycle));
+        }
+        return results;
+    }
+
+    @lombok.Getter
+    @lombok.AllArgsConstructor
+    public static class BatchReuseOutcome {
+        private final AppUser employee;
+        private final Status status;
+        private final int goalsDeployed;
+        private final EmployeeGoalCycle cycle;
+
+        public enum Status { DEPLOYED, ALREADY_HAS_GOALS, NO_ELIGIBLE_GOALS }
     }
 
     public EmployeeGoalCycle getCycle(Long cycleId, Long currentUserId) {
@@ -486,6 +627,18 @@ public class EmployeeGoalCycleService {
             if (cycle.getState() == s) return;
         }
         throw new BusinessRuleException("Cannot " + action + " while the cycle is in state " + cycle.getState());
+    }
+
+    /**
+     * True for a DRAFT cycle nobody has actually put anything into yet -- no notes, no suggestions
+     * (goals only ever get materialized once the cycle leaves DRAFT, so there's nothing else to
+     * check). Selecting an employee/year in Team Goal Setting auto-creates exactly this kind of row
+     * the moment there's no cycle yet, so its mere existence can't be treated as "already has goals".
+     */
+    private boolean isEmptyDraftCycle(EmployeeGoalCycle cycle) {
+        if (cycle.getState() != EmployeeGoalCycle.CycleState.DRAFT) return false;
+        if (!isBlank(cycle.getLeaderStrengths()) || !isBlank(cycle.getLeaderWeaknesses())) return false;
+        return suggestionRepository.findByCycleIdOrderBySortOrder(cycle.getId()).isEmpty();
     }
 
     /** All 3 rubric levels must be filled in before a goal can be handed to the employee for review. */

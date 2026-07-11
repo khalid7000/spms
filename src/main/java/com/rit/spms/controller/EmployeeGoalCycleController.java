@@ -1,5 +1,7 @@
 package com.rit.spms.controller;
 
+import com.rit.spms.domain.AnnualEvaluation;
+import com.rit.spms.domain.AnnualEvaluationNextCycleGoal;
 import com.rit.spms.domain.AppUser;
 import com.rit.spms.domain.EmployeeGoal;
 import com.rit.spms.domain.EmployeeGoalCycle;
@@ -40,6 +42,54 @@ public class EmployeeGoalCycleController {
     }
 
     // ─── Cycle lifecycle ────────────────────────────────────────────────────
+
+    // Checked by GoalSettingPage before it auto-opens a fresh DRAFT cycle for an employee/year
+    // pair that has none yet -- grouped by the concluded evaluation each batch of goals came from
+    // so the picker can label them (e.g. "From 2025-2026 evaluation").
+    @GetMapping("/reusable-next-cycle-goals")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<ReusableGoalGroupResponse>>> getReusableNextCycleGoals(
+            @RequestParam Long employeeId) {
+        List<AnnualEvaluationNextCycleGoal> goals = cycleService.findReusableNextCycleGoals(employeeId);
+        java.util.LinkedHashMap<Long, ReusableGoalGroupResponse> groups = new java.util.LinkedHashMap<>();
+        for (AnnualEvaluationNextCycleGoal g : goals) {
+            AnnualEvaluation evaluation = g.getEvaluation();
+            ReusableGoalGroupResponse group = groups.computeIfAbsent(evaluation.getId(), id -> {
+                ReusableGoalGroupResponse r = new ReusableGoalGroupResponse();
+                r.setEvaluationId(evaluation.getId());
+                r.setAcademicYearId(evaluation.getAcademicYear().getId());
+                r.setAcademicYearName(evaluation.getAcademicYear().getName());
+                r.setGoals(new java.util.ArrayList<>());
+                return r;
+            });
+            group.getGoals().add(mapReusable(g));
+        }
+        return ResponseEntity.ok(ApiResponse.success(new java.util.ArrayList<>(groups.values())));
+    }
+
+    @PostMapping("/use-next-cycle-goals")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<CycleResponse>> useNextCycleGoals(
+            @Valid @RequestBody UseNextCycleGoalsRequest req, @AuthenticationPrincipal UserPrincipal principal) {
+        EmployeeGoalCycle cycle = cycleService.useNextCycleGoals(
+                req.getEmployeeId(), req.getAcademicYearId(), req.getNextCycleGoalIds(), principal.getId());
+        return ResponseEntity.status(201).body(ApiResponse.success(
+                "Goals deployed from a prior evaluation", map(cycle, principal.getId())));
+    }
+
+    // Runs the reuse check across every one of this head's direct reports at once, instead of
+    // one employee at a time -- for each, checks a concluded evaluation from sourceAcademicYearId
+    // for unused Next Cycle Goals and an empty goal slate for targetAcademicYearId; deploys when
+    // both hold, and reports why not otherwise.
+    @PostMapping("/batch-use-next-cycle-goals")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<BatchReuseResultResponse>>> batchUseNextCycleGoals(
+            @Valid @RequestBody BatchUseNextCycleGoalsRequest req, @AuthenticationPrincipal UserPrincipal principal) {
+        List<EmployeeGoalCycleService.BatchReuseOutcome> outcomes = cycleService.batchUseNextCycleGoals(
+                req.getTargetAcademicYearId(), req.getSourceAcademicYearId(), principal.getId());
+        List<BatchReuseResultResponse> responses = outcomes.stream().map(this::mapBatchOutcome).toList();
+        return ResponseEntity.ok(ApiResponse.success(responses));
+    }
 
     @PostMapping
     @PreAuthorize("isAuthenticated()")
@@ -305,6 +355,48 @@ public class EmployeeGoalCycleController {
     }
 
     @lombok.Data
+    public static class UseNextCycleGoalsRequest {
+        @NotNull private Long employeeId;
+        @NotNull private Long academicYearId;
+        @NotNull private List<Long> nextCycleGoalIds;
+    }
+
+    @lombok.Data
+    public static class ReusableGoalGroupResponse {
+        private Long evaluationId;
+        private Long academicYearId;
+        private String academicYearName;
+        private List<ReusableGoalResponse> goals;
+    }
+
+    @lombok.Data
+    public static class ReusableGoalResponse {
+        private Long id;
+        private Long categoryId;
+        private String categoryName;
+        private String title;
+        private String description;
+        private String rubricUnsatisfactory;
+        private String rubricMeetsExpectations;
+        private String rubricExceedsExpectations;
+    }
+
+    @lombok.Data
+    public static class BatchUseNextCycleGoalsRequest {
+        @NotNull private Long targetAcademicYearId;
+        @NotNull private Long sourceAcademicYearId;
+    }
+
+    @lombok.Data
+    public static class BatchReuseResultResponse {
+        private Long employeeId;
+        private String employeeName;
+        private String status;
+        private Integer goalsDeployed;
+        private Long cycleId;
+    }
+
+    @lombok.Data
     public static class CycleResponse {
         private Long id;
         private Long employeeId;
@@ -404,6 +496,36 @@ public class EmployeeGoalCycleController {
         resp.setRubricUnsatisfactory(s.getRubricUnsatisfactory());
         resp.setRubricMeetsExpectations(s.getRubricMeetsExpectations());
         resp.setRubricExceedsExpectations(s.getRubricExceedsExpectations());
+        return resp;
+    }
+
+    /** Effective title/description shown in the reuse picker -- employee's edit wins over the head's, per {@link EmployeeGoalCycleService#useNextCycleGoals}. */
+    private ReusableGoalResponse mapReusable(AnnualEvaluationNextCycleGoal g) {
+        ReusableGoalResponse resp = new ReusableGoalResponse();
+        resp.setId(g.getId());
+        resp.setCategoryId(g.getCategory().getId());
+        resp.setCategoryName(g.getCategory().getCategoryName());
+        String title = g.getEmployeeEditedTitle() != null && !g.getEmployeeEditedTitle().isBlank() ? g.getEmployeeEditedTitle()
+                : g.getLeaderEditedTitle() != null && !g.getLeaderEditedTitle().isBlank() ? g.getLeaderEditedTitle()
+                : g.getSuggestedTitle();
+        String description = g.getEmployeeEditedDescription() != null ? g.getEmployeeEditedDescription()
+                : g.getLeaderEditedDescription() != null ? g.getLeaderEditedDescription()
+                : g.getSuggestedDescription();
+        resp.setTitle(title);
+        resp.setDescription(description);
+        resp.setRubricUnsatisfactory(g.getRubricUnsatisfactory());
+        resp.setRubricMeetsExpectations(g.getRubricMeetsExpectations());
+        resp.setRubricExceedsExpectations(g.getRubricExceedsExpectations());
+        return resp;
+    }
+
+    private BatchReuseResultResponse mapBatchOutcome(EmployeeGoalCycleService.BatchReuseOutcome o) {
+        BatchReuseResultResponse resp = new BatchReuseResultResponse();
+        resp.setEmployeeId(o.getEmployee().getId());
+        resp.setEmployeeName(o.getEmployee().getFname() + " " + o.getEmployee().getLname());
+        resp.setStatus(o.getStatus().name());
+        resp.setGoalsDeployed(o.getGoalsDeployed());
+        resp.setCycleId(o.getCycle() != null ? o.getCycle().getId() : null);
         return resp;
     }
 

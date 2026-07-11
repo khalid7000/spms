@@ -31,7 +31,10 @@ public class AnnualEvaluationCategoryResult {
     @Column(name = "head_category_rank")
     private Integer headCategoryRank;
 
-    /** The head's written comments for this category -- required before the head can submit their evaluation. */
-    @Column(name = "head_comments", columnDefinition = "TEXT")
-    private String headComments;
+    /** The head's written comments for this category, split into two required parts -- before submitting their evaluation. */
+    @Column(name = "head_comments_strengths", columnDefinition = "TEXT")
+    private String headCommentsStrengths;
+
+    @Column(name = "head_comments_improvements", columnDefinition = "TEXT")
+    private String headCommentsImprovements;
 }

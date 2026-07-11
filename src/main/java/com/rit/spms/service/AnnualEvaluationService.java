@@ -38,6 +38,7 @@ public class AnnualEvaluationService {
     private final PortfolioEntryRepository entryRepository;
     private final EmployeeGoalCycleRepository goalCycleRepository;
     private final EmployeeGoalRepository goalRepository;
+    private final AnnualEvaluationNextCycleGoalRepository nextCycleGoalRepository;
     private final PermissionService permissionService;
     private final ApplicationEventPublisher eventPublisher;
     private final AuditService auditService;
@@ -490,13 +491,15 @@ public class AnnualEvaluationService {
     }
 
     /** The head's written remarks for a category -- separate from the numeric rank, required before submitting. */
-    public AnnualEvaluationCategoryResult updateCategoryHeadComments(Long evaluationId, Long categoryId, String comments, Long currentUserId) {
+    public AnnualEvaluationCategoryResult updateCategoryHeadComments(Long evaluationId, Long categoryId,
+                                                                      String strengths, String improvements, Long currentUserId) {
         AnnualEvaluation evaluation = requireEvaluation(evaluationId);
         assertIsHead(evaluation, currentUserId);
         assertHeadCanEdit(evaluation);
 
         AnnualEvaluationCategoryResult result = requireCategoryResult(evaluation, categoryId);
-        result.setHeadComments(comments);
+        result.setHeadCommentsStrengths(strengths);
+        result.setHeadCommentsImprovements(improvements);
         AnnualEvaluationCategoryResult saved = categoryResultRepository.save(result);
 
         notifyIfEditedAfterSubmit(evaluation);
@@ -519,12 +522,13 @@ public class AnnualEvaluationService {
     }
 
     /** The head's written remarks for the whole Annual Goals section -- one field, required before submitting, same as a category's. */
-    public AnnualEvaluation updateGoalsHeadComments(Long evaluationId, String comments, Long currentUserId) {
+    public AnnualEvaluation updateGoalsHeadComments(Long evaluationId, String strengths, String improvements, Long currentUserId) {
         AnnualEvaluation evaluation = requireEvaluation(evaluationId);
         assertIsHead(evaluation, currentUserId);
         assertHeadCanEdit(evaluation);
 
-        evaluation.setGoalsHeadComments(comments);
+        evaluation.setGoalsHeadCommentsStrengths(strengths);
+        evaluation.setGoalsHeadCommentsImprovements(improvements);
         AnnualEvaluation saved = evaluationRepository.save(evaluation);
 
         notifyIfEditedAfterSubmit(evaluation);
@@ -573,8 +577,8 @@ public class AnnualEvaluationService {
         if (categoryResults.stream().anyMatch(r -> r.getHeadCategoryRank() == null)) {
             throw new BusinessRuleException("Every category must have a head rank before submitting");
         }
-        if (categoryResults.stream().anyMatch(r -> r.getHeadComments() == null || r.getHeadComments().isBlank())) {
-            throw new BusinessRuleException("Every category must have head comments before submitting");
+        if (categoryResults.stream().anyMatch(r -> isBlank(r.getHeadCommentsStrengths()) || isBlank(r.getHeadCommentsImprovements()))) {
+            throw new BusinessRuleException("Every category must have both Strengths and Potential Improvements comments before submitting");
         }
         List<CategoryCriteria> allCriteria = categoryResults.stream()
                 .flatMap(r -> criteriaRepository.findByCategoryIdOrderBySortOrder(r.getCategory().getId()).stream())
@@ -592,11 +596,18 @@ public class AnnualEvaluationService {
         if (!goalResults.isEmpty() && evaluation.getGoalsHeadRank() == null) {
             throw new BusinessRuleException("The Annual Goals section must have a head rank before submitting");
         }
-        if (!goalResults.isEmpty() && (evaluation.getGoalsHeadComments() == null || evaluation.getGoalsHeadComments().isBlank())) {
-            throw new BusinessRuleException("Comments for the Annual Goals section are required before submitting");
+        if (!goalResults.isEmpty() && (isBlank(evaluation.getGoalsHeadCommentsStrengths()) || isBlank(evaluation.getGoalsHeadCommentsImprovements()))) {
+            throw new BusinessRuleException("Both Strengths and Potential Improvements comments for the Annual Goals section are required before submitting");
         }
         if (evaluation.getHeadOverallRank() == null) {
             throw new BusinessRuleException("An overall annual performance rank is required before submitting");
+        }
+        List<AnnualEvaluationNextCycleGoal> nextCycleGoals = nextCycleGoalRepository.findByEvaluationIdOrderBySortOrder(evaluationId);
+        if (nextCycleGoals.isEmpty()) {
+            throw new BusinessRuleException("At least one Next Cycle Goal is required before submitting");
+        }
+        if (nextCycleGoals.stream().anyMatch(g -> g.getLeaderActionType() == null)) {
+            throw new BusinessRuleException("Every Next Cycle Goal must be reviewed before submitting");
         }
 
         evaluation.setHeadSubmittedAt(LocalDateTime.now());
@@ -637,6 +648,7 @@ public class AnnualEvaluationService {
         assertIsEmployee(evaluation, currentUserId);
         assertState(evaluation, AnnualEvaluationState.HEAD_SUBMITTED, "The evaluation is not ready for signature yet");
         assertEmployeeHasNotActed(evaluation);
+        assertAllNextCycleGoalsReviewedByEmployee(evaluationId);
         if (signatureName == null || signatureName.isBlank()) {
             throw new BusinessRuleException("Type your full name to sign this evaluation");
         }
@@ -656,6 +668,7 @@ public class AnnualEvaluationService {
         assertIsEmployee(evaluation, currentUserId);
         assertState(evaluation, AnnualEvaluationState.HEAD_SUBMITTED, "The evaluation is not ready for signature yet");
         assertEmployeeHasNotActed(evaluation);
+        assertAllNextCycleGoalsReviewedByEmployee(evaluationId);
         if (rationale == null || rationale.isBlank()) {
             throw new BusinessRuleException("A rationale is required to refuse to sign");
         }
@@ -673,6 +686,14 @@ public class AnnualEvaluationService {
     private void assertEmployeeHasNotActed(AnnualEvaluation evaluation) {
         if (evaluation.getEmployeeSignedAt() != null || Boolean.TRUE.equals(evaluation.getEmployeeRefused())) {
             throw new BusinessRuleException("You have already signed or refused to sign this evaluation");
+        }
+    }
+
+    /** The employee must review every Next Cycle Goal (approve/edit/reject) before they may sign or refuse. */
+    private void assertAllNextCycleGoalsReviewedByEmployee(Long evaluationId) {
+        List<AnnualEvaluationNextCycleGoal> nextCycleGoals = nextCycleGoalRepository.findByEvaluationIdOrderBySortOrder(evaluationId);
+        if (nextCycleGoals.stream().anyMatch(g -> g.getEmployeeActionType() == null)) {
+            throw new BusinessRuleException("You must review every Next Cycle Goal before signing or refusing this evaluation");
         }
     }
 
@@ -731,6 +752,10 @@ public class AnnualEvaluationService {
         if (evaluation.isLocked()) {
             throw new BusinessRuleException("This evaluation is locked -- a signature has already been recorded");
         }
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     private void assertCanView(AppUser employee, AppUser head, Long currentUserId) {
