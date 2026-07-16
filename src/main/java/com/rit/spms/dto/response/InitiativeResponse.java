@@ -23,6 +23,7 @@ public class InitiativeResponse {
     private String assessmentPeriodName;
     private boolean hasAchievements;
     private long achievementCount;
+    private List<AchievementResponse> recentAchievements;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<MeasurementResponse> measurements;

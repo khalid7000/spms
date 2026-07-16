@@ -102,7 +102,7 @@ public class AuthController {
         }
         var user = adminService.createUser(
                 request.getFname(), request.getLname(), request.getEmail(),
-                request.getTitle(), null, Set.of(), request.getPassword());
+                request.getTitle(), null, null, Set.of(), request.getPassword(), null);
 
         return ResponseEntity.status(201).body(ApiResponse.success("User registered", Map.of(
                 "userId", user.getId(),

@@ -44,6 +44,10 @@ public class AppUser {
     @JoinColumn(name = "department_id")
     private Department department;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "org_group_id")
+    private OrgGroup orgGroup;
+
     @ElementCollection(targetClass = SystemRole.class, fetch = FetchType.EAGER)
     @CollectionTable(name = "app_user_system_role", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)

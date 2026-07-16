@@ -244,12 +244,17 @@ public class PdfExportService {
                     doc.add(new Paragraph("Potential Improvements: " + catResult.getHeadCommentsImprovements())
                             .setFontSize(9).setItalic().setFontColor(GRAY_TEXT).setMarginBottom(6));
                 }
+                if (catResult.getEmployeeComments() != null && !catResult.getEmployeeComments().isBlank()) {
+                    doc.add(new Paragraph("Employee Comments & Reflection on " + category.getCategoryName()
+                            + ": " + catResult.getEmployeeComments())
+                            .setFontSize(9).setItalic().setFontColor(GRAY_TEXT).setMarginBottom(6));
+                }
 
                 for (CategoryCriteria criteria : categoryCriteriaRepository.findByCategoryIdOrderBySortOrder(category.getId())) {
-                    Integer headRank = criteriaResults.stream()
+                    AnnualEvaluationCriteriaResult criteriaResult = criteriaResults.stream()
                             .filter(r -> r.getCriteria().getId().equals(criteria.getId()))
-                            .map(AnnualEvaluationCriteriaResult::getHeadRank)
                             .findFirst().orElse(null);
+                    Integer headRank = criteriaResult != null ? criteriaResult.getHeadRank() : null;
 
                     doc.add(new Paragraph("Criterion: " + criteria.getCriteriaName() + "  —  " + rankText(titleId, headRank))
                             .setFontSize(10).setBold().setFontColor(ColorConstants.BLACK)
@@ -271,6 +276,13 @@ public class PdfExportService {
                                 + "  (" + entry.getAchievement().getRecordedAt().format(df) + ")")
                                 .setFontSize(9).setFontColor(GRAY_TEXT)
                                 .setMarginLeft(18).setMarginBottom(2));
+                    }
+                    if (criteriaResult != null && criteriaResult.getEmployeeComments() != null
+                            && !criteriaResult.getEmployeeComments().isBlank()) {
+                        doc.add(new Paragraph("Optional Employee Comments & Reflection on " + criteria.getCriteriaName()
+                                + ": " + criteriaResult.getEmployeeComments())
+                                .setFontSize(9).setItalic().setFontColor(GRAY_TEXT)
+                                .setMarginLeft(12).setMarginBottom(2));
                     }
                 }
             }
@@ -306,6 +318,10 @@ public class PdfExportService {
                                 .setMarginLeft(18).setMarginBottom(2));
                     }
                 }
+                if (evaluation.getGoalsEmployeeComments() != null && !evaluation.getGoalsEmployeeComments().isBlank()) {
+                    doc.add(new Paragraph("Employee Comments & Reflection on Annual Goals: " + evaluation.getGoalsEmployeeComments())
+                            .setFontSize(9).setItalic().setFontColor(GRAY_TEXT).setMarginBottom(6));
+                }
                 if (evaluation.getGoalsHeadCommentsStrengths() != null && !evaluation.getGoalsHeadCommentsStrengths().isBlank()) {
                     doc.add(new Paragraph("Strengths: " + evaluation.getGoalsHeadCommentsStrengths())
                             .setFontSize(9).setItalic().setFontColor(GRAY_TEXT).setMarginBottom(2));
@@ -314,6 +330,12 @@ public class PdfExportService {
                     doc.add(new Paragraph("Potential Improvements: " + evaluation.getGoalsHeadCommentsImprovements())
                             .setFontSize(9).setItalic().setFontColor(GRAY_TEXT).setMarginBottom(6));
                 }
+            }
+
+            if (evaluation.getEmployeeFinalSummary() != null && !evaluation.getEmployeeFinalSummary().isBlank()) {
+                areaHeader(doc, "General Final Summary Statement");
+                doc.add(new Paragraph(evaluation.getEmployeeFinalSummary())
+                        .setFontSize(10).setFontColor(ColorConstants.BLACK).setMarginBottom(10));
             }
 
             doc.add(new LineSeparator(new SolidLine()).setMarginTop(14).setMarginBottom(10));
@@ -508,9 +530,15 @@ public class PdfExportService {
                                 + "  (" + a.getAuthor().getFname() + " "
                                 + a.getAuthor().getLname()
                                 + ", " + a.getRecordedAt().format(df) + ")";
+                        boolean hasDetails = a.getDetails() != null && !a.getDetails().isBlank();
                         doc.add(new Paragraph(line)
                                 .setFontSize(8.5f).setFontColor(GRAY_TEXT)
-                                .setMarginTop(0).setMarginBottom(2));
+                                .setMarginTop(0).setMarginBottom(hasDetails ? 0 : 2));
+                        if (hasDetails) {
+                            doc.add(new Paragraph(a.getDetails())
+                                    .setFontSize(8f).setFontColor(GRAY_TEXT).setItalic()
+                                    .setMarginLeft(22).setMarginTop(1).setMarginBottom(3));
+                        }
                     }
                 }
             }

@@ -20,8 +20,12 @@ public class Achievement {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Null for achievements produced by a customizable achievement module (see
+    // CustomizableAchievementModule) -- those are evaluation-only and deliberately not linked to
+    // the Strategy Tree. Every Strategy/Initiative-side query reaches Achievement through a
+    // measurementId, so a null-measurement row simply never surfaces there.
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "measurement_id", nullable = false)
+    @JoinColumn(name = "measurement_id")
     private Measurement measurement;
 
     @Column(nullable = false, length = 500)
@@ -41,6 +45,15 @@ public class Achievement {
 
     @Column(name = "private_notes", columnDefinition = "TEXT")
     private String privateNotes;
+
+    // Set only when this achievement was produced by a CustomizableAchievementModule tool (e.g.
+    // "TEACHING_EVALUATIONS"), never by the employee choosing it themselves -- null for achievements
+    // logged the normal, manual way. That module fixed this achievement's category/criteria at
+    // creation time (see TeachingEvaluationSessionService.finalizeAchievement), so callers use this
+    // field to keep those two fields locked afterward too, even though the row itself is a normal
+    // PortfolioEntry/Achievement from then on.
+    @Column(name = "created_by_module_code", length = 100)
+    private String createdByModuleCode;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "author_id", nullable = false)

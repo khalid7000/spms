@@ -1,6 +1,7 @@
 package com.rit.spms.repository;
 
 import com.rit.spms.domain.Achievement;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -74,4 +75,10 @@ public interface AchievementRepository extends JpaRepository<Achievement, Long> 
            "ORDER BY COALESCE(a.assessmentPeriod.name, 'Unassigned'), " +
            "a.measurement.initiative.objective.goal.strategy.department.name")
     List<Object[]> countByPeriodAndDepartmentForUniversityInitiative(@Param("universityInitiativeId") Long universityInitiativeId);
+
+    // Whole-strategy "recently logged" feed for the achievement-first Strategy Tree rail -- spans
+    // every Goal/Objective/Initiative/Measurement under one strategy, most recent first.
+    @Query("SELECT a FROM Achievement a WHERE a.measurement.initiative.objective.goal.strategy.id = :strategyId " +
+           "ORDER BY a.recordedAt DESC")
+    List<Achievement> findRecentByStrategyId(@Param("strategyId") Long strategyId, Pageable pageable);
 }

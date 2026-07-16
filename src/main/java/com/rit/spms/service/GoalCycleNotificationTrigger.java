@@ -36,7 +36,7 @@ public class GoalCycleNotificationTrigger {
         AppUser employee = requireUser(event.employeeId());
         notificationService.create(leader,
                 fullName(employee) + " sent their goals back for more consideration.",
-                NotificationType.GOAL_CYCLE, event.cycleId());
+                NotificationType.GOAL_CYCLE_HEAD, event.cycleId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -45,7 +45,7 @@ public class GoalCycleNotificationTrigger {
         AppUser employee = requireUser(event.employeeId());
         notificationService.create(leader,
                 fullName(employee) + " accepted and signed their goals -- the goal cycle is now deployed for the year.",
-                NotificationType.GOAL_CYCLE, event.cycleId());
+                NotificationType.GOAL_CYCLE_HEAD, event.cycleId());
     }
 
     private AppUser requireUser(Long userId) {

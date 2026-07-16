@@ -84,6 +84,18 @@ public class AnnualEvaluation {
     @Column(name = "employee_submitted_at")
     private LocalDateTime employeeSubmittedAt;
 
+    /** Set the one time the head sends this back to the employee for another round; a non-null value means that round has already been used. */
+    @Column(name = "returned_to_employee_at")
+    private LocalDateTime returnedToEmployeeAt;
+
+    /** The employee's own reflection on the whole Annual Goals section -- editable in DRAFT and RETURNED_TO_EMPLOYEE, shown before the head's comments. */
+    @Column(name = "goals_employee_comments", columnDefinition = "TEXT")
+    private String goalsEmployeeComments;
+
+    /** The employee's required closing statement for the whole evaluation -- distinct from the per-category/goals reflections. */
+    @Column(name = "employee_final_summary", columnDefinition = "TEXT")
+    private String employeeFinalSummary;
+
     @Column(name = "head_submitted_at")
     private LocalDateTime headSubmittedAt;
 

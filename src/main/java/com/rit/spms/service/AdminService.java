@@ -41,6 +41,7 @@ public class AdminService {
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
     private final AcademicYearService academicYearService;
+    private final EmployeeTitleRepository employeeTitleRepository;
 
     // --- Org Groups ---
 
@@ -159,34 +160,90 @@ public class AdminService {
 
     // --- Users ---
 
+    /**
+     * {@code currentUserId} is the caller, resolved and checked for full ADMIN before {@code
+     * systemRoles} is ever applied -- a USER_ADMIN caller (limited to user management, granted by
+     * a true ADMIN) must never be able to grant ADMIN/HR/USER_ADMIN to anyone, including via a
+     * crafted request that bypasses the UI, which only shows the roles field to a full ADMIN in
+     * the first place. This check is the actual security boundary, not the UI.
+     */
     public UserResponse createUser(String fname, String lname, String email, String title,
-                                   Long departmentId, Set<SystemRole> systemRoles, String password) {
+                                   Long departmentId, Long orgGroupId, Set<SystemRole> systemRoles,
+                                   String password, Long currentUserId) {
         if (appUserRepository.existsByEmail(email)) {
             throw new BusinessRuleException("User with email '" + email + "' already exists");
         }
+        assertKnownTitleIfUserAdmin(title, currentUserId);
         Department dept = resolveOptionalDepartment(departmentId);
+        OrgGroup group = resolveOptionalOrgGroup(orgGroupId);
+        // Self-registration (AuthController.register, currentUserId == null) is exempt -- it has no
+        // frontend page and always creates users with neither, and there's nowhere for it to ask.
+        // Every admin-driven call (currentUserId != null) must supply at least one.
+        if (currentUserId != null && dept == null && group == null) {
+            throw new BusinessRuleException("User must be assigned to either a department or an org group");
+        }
         String hash = password != null ? passwordEncoder.encode(password) : passwordEncoder.encode("changeme");
+        Set<SystemRole> effectiveRoles = callerIsFullAdmin(currentUserId) && systemRoles != null ? systemRoles : Set.of();
         AppUser user = AppUser.builder()
                 .fname(fname).lname(lname).email(email).title(title)
-                .department(dept).systemRoles(systemRoles != null ? systemRoles : Set.of()).active(true).passwordHash(hash)
+                .department(dept).orgGroup(group).systemRoles(effectiveRoles).active(true).passwordHash(hash)
                 .build();
         return UserResponse.from(appUserRepository.save(user));
     }
 
     public UserResponse updateUser(Long id, String fname, String lname, String title,
-                                   Long departmentId, Set<SystemRole> systemRoles) {
+                                   Long departmentId, Long orgGroupId, Set<SystemRole> systemRoles,
+                                   Long currentUserId) {
         AppUser user = appUserRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("AppUser", id));
         if (fname != null) user.setFname(fname);
         if (lname != null) user.setLname(lname);
-        if (title != null) user.setTitle(title);
-        if (systemRoles != null) user.setSystemRoles(systemRoles);
+        if (title != null) {
+            assertKnownTitleIfUserAdmin(title, currentUserId);
+            user.setTitle(title);
+        }
+        if (systemRoles != null && callerIsFullAdmin(currentUserId)) user.setSystemRoles(systemRoles);
         if (departmentId != null) {
             user.setDepartment(resolveOptionalDepartment(departmentId));
         } else {
             user.setDepartment(null);
         }
+        if (orgGroupId != null) {
+            user.setOrgGroup(resolveOptionalOrgGroup(orgGroupId));
+        } else {
+            user.setOrgGroup(null);
+        }
+        if (user.getDepartment() == null && user.getOrgGroup() == null) {
+            throw new BusinessRuleException("User must be assigned to either a department or an org group");
+        }
         return UserResponse.from(appUserRepository.save(user));
+    }
+
+    /**
+     * A USER_ADMIN (authenticated, but not a full ADMIN) can only assign a title that already
+     * exists in {@link com.rit.spms.domain.EmployeeTitle} -- they can edit/add users but must not
+     * be able to introduce a brand-new title string. Full ADMINs are unrestricted (unchanged
+     * behavior), and so is the public self-registration flow (currentUserId is null there) --
+     * this check only fires for an authenticated non-admin caller, i.e. specifically USER_ADMIN.
+     */
+    private void assertKnownTitleIfUserAdmin(String title, Long currentUserId) {
+        if (title == null || title.isBlank() || currentUserId == null || callerIsFullAdmin(currentUserId)) {
+            return;
+        }
+        if (employeeTitleRepository.findByTitleNameIgnoreCase(title.trim()).isEmpty()) {
+            throw new BusinessRuleException("Unknown title '" + title + "' -- User Admins can only assign an existing title");
+        }
+    }
+
+    // currentUserId is null for the public self-registration endpoint (AuthController.register) --
+    // never a full admin there, which is already what it wants (always Set.of() for self-signups).
+    private boolean callerIsFullAdmin(Long currentUserId) {
+        if (currentUserId == null) {
+            return false;
+        }
+        return appUserRepository.findById(currentUserId)
+                .map(u -> u.hasRole(SystemRole.ADMIN))
+                .orElse(false);
     }
 
     @Transactional(readOnly = true)
@@ -286,6 +343,12 @@ public class AdminService {
     public AchievementType updateAchievementType(Long id, String name, boolean active) {
         AchievementType type = achievementTypeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("AchievementType", id));
+        // System-linked rows (see AchievementType.systemCode) power other code paths -- e.g. the
+        // "Other" custom-type-name flow and the Teaching Evaluations module's gating -- and can be
+        // freely renamed, but never deactivated, through either this or deleteAchievementType.
+        if (!active && type.getSystemCode() != null) {
+            throw new BusinessRuleException("Cannot deactivate a system-linked achievement type ('" + type.getName() + "')");
+        }
         type.setName(name);
         type.setActive(active);
         return achievementTypeRepository.save(type);
@@ -294,6 +357,9 @@ public class AdminService {
     public void deleteAchievementType(Long id) {
         AchievementType type = achievementTypeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("AchievementType", id));
+        if (type.getSystemCode() != null) {
+            throw new BusinessRuleException("Cannot deactivate a system-linked achievement type ('" + type.getName() + "')");
+        }
         type.setActive(false);
         achievementTypeRepository.save(type);
     }
@@ -416,5 +482,11 @@ public class AdminService {
         if (departmentId == null) return null;
         return departmentRepository.findById(departmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Department", departmentId));
+    }
+
+    private OrgGroup resolveOptionalOrgGroup(Long orgGroupId) {
+        if (orgGroupId == null) return null;
+        return orgGroupRepository.findById(orgGroupId)
+                .orElseThrow(() -> new ResourceNotFoundException("OrgGroup", orgGroupId));
     }
 }

@@ -229,8 +229,12 @@ public class AnnualEvaluationNextCycleGoalService {
         if (evaluation.getState() != AnnualEvaluationState.HEAD_SUBMITTED) {
             throw new BusinessRuleException("You can only review next cycle goals after the head has submitted their evaluation");
         }
-        if (evaluation.isLocked()) {
-            throw new BusinessRuleException("This evaluation is locked -- you've already signed or refused");
+        // Deliberately checks the employee's OWN signed/refused status here, not the shared
+        // isLocked() -- since submitting and signing are now one combined head action, headSignedAt
+        // is always already set the instant this evaluation reaches HEAD_SUBMITTED, which would make
+        // isLocked() true throughout this entire review window and block it outright.
+        if (evaluation.getEmployeeSignedAt() != null || Boolean.TRUE.equals(evaluation.getEmployeeRefused())) {
+            throw new BusinessRuleException("You've already signed or refused this evaluation");
         }
     }
 

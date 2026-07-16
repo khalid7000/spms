@@ -40,6 +40,7 @@ public class StrategyService {
     private final MeasurementRepository measurementRepository;
     private final VisionAreaRepository visionAreaRepository;
     private final AchievementRepository achievementRepository;
+    private final AchievementService achievementService;
     private final AssessmentPeriodRepository assessmentPeriodRepository;
     private final AcademicYearRepository academicYearRepository;
     private final PermissionService permissionService;
@@ -126,7 +127,31 @@ public class StrategyService {
         permissionService.assertCanRead(currentUserId, strategyId);
         Strategy strategy = strategyRepository.findById(strategyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Strategy", strategyId));
-        return buildStrategyResponse(strategy, true, academicYearId);
+        return buildStrategyResponse(strategy, true, academicYearId, currentUserId);
+    }
+
+    /**
+     * "Recently logged" feed for the Strategy Tree's achievement rail -- every strategy member can
+     * see this (same read-access check as {@link #getStrategy}), unlike the owner/admin-only audit
+     * log, since it's meant to be a normal, everyday view of team activity, not an admin tool.
+     */
+    @Transactional(readOnly = true)
+    public List<RecentAchievementResponse> getRecentAchievements(Long strategyId, Long currentUserId, int limit) {
+        permissionService.assertCanRead(currentUserId, strategyId);
+        return achievementRepository
+                .findRecentByStrategyId(strategyId, org.springframework.data.domain.PageRequest.of(0, limit))
+                .stream()
+                .map(a -> RecentAchievementResponse.builder()
+                        .id(a.getId())
+                        .title(a.getTitle())
+                        .achievementTypeName(a.getEffectiveTypeName())
+                        .authorName(a.getAuthor().getFname() + " " + a.getAuthor().getLname())
+                        .recordedAt(a.getRecordedAt())
+                        .initiativeId(a.getMeasurement().getInitiative().getId())
+                        .initiativeTitle(a.getMeasurement().getInitiative().getTitle())
+                        .goalTitle(a.getMeasurement().getInitiative().getObjective().getGoal().getTitle())
+                        .build())
+                .toList();
     }
 
     public Strategy changeState(Long strategyId, ChangeStateRequest req, Long currentUserId) {
@@ -354,8 +379,11 @@ public class StrategyService {
                 initiativesByObjectiveId.put(o.getId(), initiativeRepository.findByObjectiveIdAndAcademicYearIsNullOrderBySortOrder(o.getId()));
             }
 
+            int totalInitiatives = objectives.stream().mapToInt(o -> initiativesByObjectiveId.get(o.getId()).size()).sum();
+
             int objectivesOnTrack = 0;
             int goalsOnTrack = 0;
+            int initiativesOnTrack = 0;
             if (mostRecent != null) {
                 for (Objective o : objectives) {
                     List<Initiative> initiatives = initiativesByObjectiveId.get(o.getId());
@@ -365,6 +393,7 @@ public class StrategyService {
                     List<String> colors = initiatives.stream()
                             .map(ini -> initiativeAchievementColor(periodAchievementCount(ini, isUniversity, mostRecent), threshold))
                             .toList();
+                    initiativesOnTrack += (int) colors.stream().filter("green"::equals).count();
                     if ("green".equals(rollupAchievementColor(colors))) {
                         objectivesOnTrack++;
                     }
@@ -400,6 +429,8 @@ public class StrategyService {
                     .goalsOnTrack(goalsOnTrack)
                     .totalObjectives(objectives.size())
                     .objectivesOnTrack(objectivesOnTrack)
+                    .totalInitiatives(totalInitiatives)
+                    .initiativesOnTrack(initiativesOnTrack)
                     .mostRecentPeriodName(mostRecent != null ? mostRecent.getName() : null)
                     .build();
         }).toList();
@@ -440,10 +471,20 @@ public class StrategyService {
     }
 
     public StrategyResponse buildStrategyResponse(Strategy strategy, boolean includeChildren) {
-        return buildStrategyResponse(strategy, includeChildren, null);
+        return buildStrategyResponse(strategy, includeChildren, null, null);
     }
 
     public StrategyResponse buildStrategyResponse(Strategy strategy, boolean includeChildren, Long academicYearId) {
+        return buildStrategyResponse(strategy, includeChildren, academicYearId, null);
+    }
+
+    /**
+     * currentUserId is only needed to compute per-achievement canEdit/canDelete and to prioritize
+     * the viewer's own achievements in each Initiative's card preview (see buildInitiativeResponse)
+     * -- callers that don't have a viewing user (or don't include children at all) use the
+     * two-arg/three-arg overloads above, which simply omit that personalization.
+     */
+    private StrategyResponse buildStrategyResponse(Strategy strategy, boolean includeChildren, Long academicYearId, Long currentUserId) {
         List<VisionAreaResponse> areas = visionAreaRepository
                 .findByStrategyIdOrderBySortOrder(strategy.getId())
                 .stream().map(a -> VisionAreaResponse.builder()
@@ -459,7 +500,7 @@ public class StrategyService {
         List<GoalResponse> goals = null;
         if (includeChildren) {
             goals = goalRepository.findByStrategyIdOrderBySortOrder(strategy.getId())
-                    .stream().map(g -> buildGoalResponse(g, academicYearId)).toList();
+                    .stream().map(g -> buildGoalResponse(g, academicYearId, currentUserId)).toList();
         }
         return StrategyResponse.builder()
                 .id(strategy.getId())
@@ -483,10 +524,10 @@ public class StrategyService {
                 .build();
     }
 
-    private GoalResponse buildGoalResponse(com.rit.spms.domain.Goal goal, Long academicYearId) {
+    private GoalResponse buildGoalResponse(com.rit.spms.domain.Goal goal, Long academicYearId, Long currentUserId) {
         List<ObjectiveResponse> objectives = objectiveRepository
                 .findByGoalIdOrderBySortOrder(goal.getId())
-                .stream().map(obj -> buildObjectiveResponse(obj, academicYearId)).toList();
+                .stream().map(obj -> buildObjectiveResponse(obj, academicYearId, currentUserId)).toList();
         return GoalResponse.builder()
                 .id(goal.getId())
                 .strategyId(goal.getStrategy().getId())
@@ -503,7 +544,7 @@ public class StrategyService {
                 .build();
     }
 
-    private ObjectiveResponse buildObjectiveResponse(Objective objective, Long academicYearId) {
+    private ObjectiveResponse buildObjectiveResponse(Objective objective, Long academicYearId, Long currentUserId) {
         List<Objective> univObjs = objectiveMappingRepository
                 .findByDeptObjectiveId(objective.getId())
                 .stream().map(om -> om.getUniversityObjective()).toList();
@@ -536,7 +577,7 @@ public class StrategyService {
 
         String periodFilter = fallbackPeriodName;
         List<InitiativeResponse> initiatives = rawInitiatives
-                .stream().map(ini -> buildInitiativeResponse(ini, periodFilter)).toList();
+                .stream().map(ini -> buildInitiativeResponse(ini, periodFilter, currentUserId)).toList();
 
         return ObjectiveResponse.builder()
                 .id(objective.getId())
@@ -553,7 +594,7 @@ public class StrategyService {
                 .build();
     }
 
-    private InitiativeResponse buildInitiativeResponse(Initiative initiative, String fallbackPeriodNameFilter) {
+    private InitiativeResponse buildInitiativeResponse(Initiative initiative, String fallbackPeriodNameFilter, Long currentUserId) {
         Initiative univInit = initiativeMappingRepository.findByDeptInitiativeId(initiative.getId())
                 .map(im -> im.getUniversityInitiative())
                 .orElse(null);
@@ -572,6 +613,33 @@ public class StrategyService {
                     ? achievementRepository.countByBaseInitiativeIdAcrossYearsAndPeriodName(initiative.getId(), fallbackPeriodNameFilter)
                     : achievementRepository.countByBaseInitiativeIdAcrossYears(initiative.getId()))
                 : achievementRepository.countByMeasurementInitiativeId(initiative.getId());
+
+        // Top 2 achievement previews for the Strategy Tree's initiative card -- same "base row vs.
+        // year-copy" branching as achievementCount above, just returning entities instead of a
+        // count, reusing the same already-ordered (recordedAt desc) repository methods the full
+        // AchievementsPanel already calls for its own listing. The viewer's own achievements are
+        // prioritized into those 2 slots (still most-recent-first among their own), so their
+        // edit/delete icons are visible on the card without opening "View all" -- falling back to
+        // the plan's most recent achievements to fill any remaining slots.
+        List<Achievement> previewSource = initiative.getAcademicYear() == null
+                ? (fallbackPeriodNameFilter != null
+                    ? achievementRepository.findByBaseInitiativeIdAcrossYearsAndPeriodName(initiative.getId(), fallbackPeriodNameFilter)
+                    : achievementRepository.findByBaseInitiativeIdAcrossYears(initiative.getId()))
+                : achievementRepository.findByInitiativeId(initiative.getId());
+        List<Achievement> own = currentUserId == null ? List.of() : previewSource.stream()
+                .filter(a -> currentUserId.equals(a.getAuthor().getId()))
+                .limit(2)
+                .toList();
+        List<Achievement> previewPicks = new ArrayList<>(own);
+        if (previewPicks.size() < 2) {
+            previewSource.stream()
+                    .filter(a -> !own.contains(a))
+                    .limit(2 - previewPicks.size())
+                    .forEach(previewPicks::add);
+        }
+        List<AchievementResponse> recentAchievements = previewPicks.stream()
+                .map(a -> achievementService.toResponse(a, currentUserId))
+                .toList();
 
         boolean isUniversity = initiative.getObjective().getGoal().getStrategy().getStrategyType() == StrategyType.UNIVERSITY;
         long mappedAchievementCount = 0;
@@ -618,6 +686,7 @@ public class StrategyService {
                 .assessmentPeriodName(fallbackPeriodNameFilter)
                 .hasAchievements(achievementCount > 0)
                 .achievementCount(achievementCount)
+                .recentAchievements(recentAchievements)
                 .mappedAchievementCount(mappedAchievementCount)
                 .departmentBreakdown(deptBreakdown)
                 .createdAt(initiative.getCreatedAt())

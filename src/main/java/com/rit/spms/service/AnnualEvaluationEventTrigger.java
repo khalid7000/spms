@@ -26,7 +26,7 @@ public class AnnualEvaluationEventTrigger {
         notificationService.create(evaluation.getHead(),
                 evaluation.getEmployee().getFname() + " " + evaluation.getEmployee().getLname()
                         + " submitted their annual self-assessment for your review.",
-                NotificationType.ANNUAL_EVALUATION, evaluation.getId());
+                NotificationType.ANNUAL_EVALUATION_HEAD, evaluation.getId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -34,6 +34,14 @@ public class AnnualEvaluationEventTrigger {
         AnnualEvaluation evaluation = require(event.evaluationId());
         notificationService.create(evaluation.getEmployee(),
                 "Your annual evaluation is ready for signature.",
+                NotificationType.ANNUAL_EVALUATION, evaluation.getId());
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onReturnedToEmployee(AnnualEvaluationReturnedToEmployeeEvent event) {
+        AnnualEvaluation evaluation = require(event.evaluationId());
+        notificationService.create(evaluation.getEmployee(),
+                "Your head returned your annual evaluation for another review -- please update and resubmit.",
                 NotificationType.ANNUAL_EVALUATION, evaluation.getId());
     }
 
@@ -56,12 +64,12 @@ public class AnnualEvaluationEventTrigger {
             notificationService.create(evaluation.getHead(),
                     evaluation.getEmployee().getFname() + " " + evaluation.getEmployee().getLname()
                             + " refused to sign their annual evaluation.",
-                    NotificationType.ANNUAL_EVALUATION, evaluation.getId());
+                    NotificationType.ANNUAL_EVALUATION_HEAD, evaluation.getId());
         } else {
             notificationService.create(evaluation.getHead(),
                     evaluation.getEmployee().getFname() + " " + evaluation.getEmployee().getLname()
                             + " signed their annual evaluation.",
-                    NotificationType.ANNUAL_EVALUATION, evaluation.getId());
+                    NotificationType.ANNUAL_EVALUATION_HEAD, evaluation.getId());
         }
     }
 

@@ -2,6 +2,7 @@ package com.rit.spms.service;
 
 import com.rit.spms.domain.AppUser;
 import com.rit.spms.domain.CategoryCriteria;
+import com.rit.spms.domain.CriteriaAchievementModule;
 import com.rit.spms.domain.TitleRankLabel;
 import com.rit.spms.domain.EmployeeTitle;
 import com.rit.spms.domain.PortfolioCategory;
@@ -30,6 +31,11 @@ public class PortfolioCategoryService {
     private final AppUserRepository appUserRepository;
     private final DepartmentRepository departmentRepository;
     private final OrgGroupRepository orgGroupRepository;
+    private final CriteriaAchievementModuleRepository achievementModuleRepository;
+    private final CustomizableAchievementModuleRegistry achievementModuleRegistry;
+    private final CriteriaInfoToolAssignmentRepository infoToolAssignmentRepository;
+    private final CriteriaInfoToolRegistry infoToolRegistry;
+    private final com.rit.spms.repository.RepositoryRecordRepository repositoryRecordRepository;
 
     // Category Management
 
@@ -274,5 +280,124 @@ public class PortfolioCategoryService {
             criteria.setSortOrder(i);
             criteriaRepository.save(criteria);
         }
+    }
+
+    // Customizable Achievement Module assignment (which module is wired to which criterion)
+
+    public List<CustomizableAchievementModule> listAchievementModules() {
+        return achievementModuleRegistry.listAll();
+    }
+
+    public List<CriteriaAchievementModule> getAchievementModuleAssignmentsForTitle(Long titleId) {
+        return achievementModuleRepository.findByTitleId(titleId);
+    }
+
+    public List<CriteriaAchievementModule> getAchievementModulesForCriteria(Long criteriaId) {
+        return achievementModuleRepository.findByCriteriaId(criteriaId);
+    }
+
+    /**
+     * Assigns a module to a criterion -- "one and only one criterion inside that title" reads
+     * most naturally as a move, so any existing assignment of this same module elsewhere within
+     * the criterion's title is removed first (not a hard error). Re-assigning to the SAME
+     * criterion (e.g. just to change the limit) updates that row's limit in place instead --
+     * deleting and re-inserting a row with the same (module_code, criteria_id) in one transaction
+     * would violate the unique constraint, since Hibernate flushes inserts before deletes.
+     */
+    public CriteriaAchievementModule assignAchievementModule(String moduleCode, Long criteriaId, Integer maxAchievementsPerYear, Boolean mandatory, String displayName) {
+        achievementModuleRegistry.require(moduleCode); // throws if the code isn't a registered module
+        if (maxAchievementsPerYear == null || maxAchievementsPerYear <= 0) {
+            throw new BusinessRuleException("Max achievements per year must be a positive number");
+        }
+        boolean isMandatory = Boolean.TRUE.equals(mandatory);
+        String effectiveDisplayName = (displayName == null || displayName.isBlank()) ? null : displayName.trim();
+        CategoryCriteria criteria = criteriaRepository.findById(criteriaId)
+                .orElseThrow(() -> new ResourceNotFoundException("CategoryCriteria", criteriaId));
+
+        Long titleId = criteria.getCategory().getTitle().getId();
+        java.util.Optional<CriteriaAchievementModule> existing = achievementModuleRepository.findByModuleCodeAndTitleId(moduleCode, titleId);
+        if (existing.isPresent() && existing.get().getCriteria().getId().equals(criteriaId)) {
+            CriteriaAchievementModule assignment = existing.get();
+            assignment.setMaxAchievementsPerYear(maxAchievementsPerYear);
+            assignment.setMandatory(isMandatory);
+            assignment.setDisplayName(effectiveDisplayName);
+            return achievementModuleRepository.save(assignment);
+        }
+        existing.ifPresent(achievementModuleRepository::delete);
+
+        return achievementModuleRepository.save(CriteriaAchievementModule.builder()
+                .moduleCode(moduleCode)
+                .criteria(criteria)
+                .maxAchievementsPerYear(maxAchievementsPerYear)
+                .mandatory(isMandatory)
+                .displayName(effectiveDisplayName)
+                .build());
+    }
+
+    public void unassignAchievementModule(String moduleCode, Long criteriaId) {
+        achievementModuleRepository.findByCriteriaId(criteriaId).stream()
+                .filter(a -> a.getModuleCode().equals(moduleCode))
+                .findFirst()
+                .ifPresent(achievementModuleRepository::delete);
+    }
+
+    // Criteria Info Tool assignment (head-only viewer, parallel to achievement modules above)
+
+    public List<CriteriaInfoTool> listInfoTools() {
+        return infoToolRegistry.listAll();
+    }
+
+    public List<com.rit.spms.domain.CriteriaInfoToolAssignment> getInfoToolAssignmentsForTitle(Long titleId) {
+        return infoToolAssignmentRepository.findByTitleId(titleId);
+    }
+
+    public List<com.rit.spms.domain.CriteriaInfoToolAssignment> getInfoToolsForCriteria(Long criteriaId) {
+        return infoToolAssignmentRepository.findByCriteriaId(criteriaId);
+    }
+
+    public List<String> getRepositoryTypes() {
+        return repositoryRecordRepository.findDistinctSourceTypes();
+    }
+
+    /**
+     * Same move-semantics as {@link #assignAchievementModule}, but scoped by
+     * (toolCode, repositorySourceType) rather than toolCode alone -- {@code
+     * CentralRepositoryViewerTool} behaves as a functionally distinct tool per source type (Early
+     * Alert vs Grade Distribution), so assigning one must never disturb the other, even though they
+     * share a toolCode. A single criterion CAN legitimately carry both at once.
+     */
+    public com.rit.spms.domain.CriteriaInfoToolAssignment assignInfoTool(
+            String toolCode, Long criteriaId, String displayName, String repositorySourceType) {
+        infoToolRegistry.require(toolCode); // throws if the code isn't a registered tool
+        if (displayName == null || displayName.isBlank()) {
+            throw new BusinessRuleException("A display name is required");
+        }
+        CategoryCriteria criteria = criteriaRepository.findById(criteriaId)
+                .orElseThrow(() -> new ResourceNotFoundException("CategoryCriteria", criteriaId));
+
+        Long titleId = criteria.getCategory().getTitle().getId();
+        Optional<com.rit.spms.domain.CriteriaInfoToolAssignment> existing =
+                infoToolAssignmentRepository.findByToolCodeAndRepositorySourceTypeAndTitleId(toolCode, repositorySourceType, titleId);
+        if (existing.isPresent() && existing.get().getCriteria().getId().equals(criteriaId)) {
+            com.rit.spms.domain.CriteriaInfoToolAssignment assignment = existing.get();
+            assignment.setDisplayName(displayName.trim());
+            return infoToolAssignmentRepository.save(assignment);
+        }
+        existing.ifPresent(infoToolAssignmentRepository::delete);
+
+        return infoToolAssignmentRepository.save(com.rit.spms.domain.CriteriaInfoToolAssignment.builder()
+                .toolCode(toolCode)
+                .criteria(criteria)
+                .displayName(displayName.trim())
+                .repositorySourceType(repositorySourceType)
+                .build());
+    }
+
+    /** {@code repositorySourceType} disambiguates which assignment to remove -- a criterion can hold more than one with the same toolCode. */
+    public void unassignInfoTool(String toolCode, Long criteriaId, String repositorySourceType) {
+        infoToolAssignmentRepository.findByCriteriaId(criteriaId).stream()
+                .filter(a -> a.getToolCode().equals(toolCode) && java.util.Objects.equals(a.getRepositorySourceType(), repositorySourceType))
+                .findFirst()
+                .ifPresent(infoToolAssignmentRepository::delete);
     }
 }

@@ -90,6 +90,16 @@ public class StrategyController {
                 strategyService.buildStrategyResponse(strategy, false)));
     }
 
+    /** "Recently logged" feed for the achievement rail -- open to any strategy member, not just owners/admins. */
+    @GetMapping("/{id}/achievements/recent")
+    public ResponseEntity<ApiResponse<List<com.rit.spms.dto.response.RecentAchievementResponse>>> getRecentAchievements(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "10") int limit,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                strategyService.getRecentAchievements(id, principal.getId(), limit)));
+    }
+
     @GetMapping("/{id}/audit-log")
     public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> getAuditLog(
             @PathVariable Long id,

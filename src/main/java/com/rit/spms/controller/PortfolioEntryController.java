@@ -117,7 +117,21 @@ public class PortfolioEntryController {
     public ResponseEntity<ApiResponse<PortfolioEntryResponse>> getEntryByAchievement(
             @PathVariable Long achievementId, @AuthenticationPrincipal UserPrincipal principal) {
         PortfolioEntry entry = entryService.getEntryByAchievementId(achievementId, principal.getId());
-        return ResponseEntity.ok(ApiResponse.success(entry != null ? map(entry) : null));
+        if (entry == null) {
+            return ResponseEntity.ok(ApiResponse.success(null));
+        }
+        PortfolioEntryResponse resp = map(entry);
+        // Self-assessment rating, evidence link, and Annual Goal are personal to the employee --
+        // only the achievement's own author or someone in their org hierarchy (their head, or any
+        // head above that head) may see them; every other strategy member sees the achievement
+        // itself but not this evaluation-facing detail.
+        if (!entryService.canViewSensitiveFields(achievementId, principal.getId())) {
+            resp.setCategoryRating(null);
+            resp.setEvidenceUrl(null);
+            resp.setGoalId(null);
+            resp.setGoalTitle(null);
+        }
+        return ResponseEntity.ok(ApiResponse.success(resp));
     }
 
     @GetMapping("/by-measurement/{measurementId}")
@@ -189,6 +203,7 @@ public class PortfolioEntryController {
         private Long criteriaId;
         private String criteriaName;
         private Long goalId;
+        private String goalTitle;
         private Integer categoryRating;
         private String evidenceUrl;
         private LocalDateTime recordedAt;
@@ -242,7 +257,7 @@ public class PortfolioEntryController {
         resp.setId(entry.getId());
         resp.setAchievementId(entry.getAchievement().getId());
         resp.setEmployeeId(entry.getEmployee().getId());
-        resp.setMeasurementId(entry.getAchievement().getMeasurement().getId());
+        resp.setMeasurementId(entry.getAchievement().getMeasurement() != null ? entry.getAchievement().getMeasurement().getId() : null);
         resp.setAchievementTitle(entry.getAchievement().getTitle());
         resp.setAchievementDetails(entry.getAchievement().getDetails());
         resp.setAchievementTypeName(entry.getAchievement().getEffectiveTypeName());
@@ -254,6 +269,7 @@ public class PortfolioEntryController {
         }
         if (entry.getGoal() != null) {
             resp.setGoalId(entry.getGoal().getId());
+            resp.setGoalTitle(entry.getGoal().getGoalTitle());
         }
         resp.setCategoryRating(entry.getCategoryRating());
         resp.setEvidenceUrl(entry.getEvidenceUrl());

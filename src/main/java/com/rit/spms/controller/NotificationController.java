@@ -42,6 +42,20 @@ public class NotificationController {
         return ResponseEntity.ok(ApiResponse.success("Notification marked read", null));
     }
 
+    @PutMapping("/{id}/unread")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> markUnread(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        notificationService.markUnread(id, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Notification marked unread", null));
+    }
+
+    @PutMapping("/mark-all-read")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> markAllRead(@AuthenticationPrincipal UserPrincipal principal) {
+        notificationService.markAllRead(principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("All notifications marked read", null));
+    }
+
     @lombok.Data
     public static class NotificationResponse {
         private Long id;

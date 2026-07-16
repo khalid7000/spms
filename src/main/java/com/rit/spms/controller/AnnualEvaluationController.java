@@ -4,8 +4,15 @@ import com.rit.spms.domain.*;
 import com.rit.spms.domain.enums.PortfolioReviewActionType;
 import com.rit.spms.dto.response.ApiResponse;
 import com.rit.spms.security.UserPrincipal;
+import com.rit.spms.repository.CriteriaAchievementModuleRepository;
+import com.rit.spms.repository.CriteriaInfoToolAssignmentRepository;
+import com.rit.spms.service.AchievementService;
 import com.rit.spms.service.AnnualEvaluationNextCycleGoalService;
 import com.rit.spms.service.AnnualEvaluationService;
+import com.rit.spms.service.CriteriaInfoTool;
+import com.rit.spms.service.CriteriaInfoToolRegistry;
+import com.rit.spms.service.PermissionService;
+import com.rit.spms.service.RatingAssistantSelectionService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -20,9 +27,11 @@ import java.util.List;
 
 /**
  * REST surface for the end-of-year Annual Evaluation workflow: employee self-assessment,
- * head rating (per-criteria, per-category, overall), and the sign/refuse-to-sign step that
- * concludes and freezes the evaluation. See {@link AnnualEvaluationService} for the actual
- * state machine and edit-window rules this controller just exposes.
+ * head rating (per-criteria, per-category, overall) followed by a combined submit-and-sign,
+ * an optional one-time return-to-employee round in between, and the employee's own
+ * sign/refuse-to-sign step that concludes and freezes the evaluation. See {@link
+ * AnnualEvaluationService} for the actual state machine and edit-window rules this controller
+ * just exposes.
  */
 @RestController
 @RequestMapping("/api/portfolio/evaluations")
@@ -31,6 +40,12 @@ public class AnnualEvaluationController {
 
     private final AnnualEvaluationService evaluationService;
     private final AnnualEvaluationNextCycleGoalService nextCycleGoalService;
+    private final CriteriaAchievementModuleRepository achievementModuleRepository;
+    private final RatingAssistantSelectionService ratingAssistantSelectionService;
+    private final AchievementService achievementService;
+    private final CriteriaInfoToolAssignmentRepository infoToolAssignmentRepository;
+    private final CriteriaInfoToolRegistry infoToolRegistry;
+    private final PermissionService permissionService;
 
     @GetMapping("/my/{academicYearId}")
     @PreAuthorize("isAuthenticated()")
@@ -75,6 +90,60 @@ public class AnnualEvaluationController {
             @PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         AnnualEvaluation evaluation = evaluationService.getById(id, principal.getId());
         return ResponseEntity.ok(ApiResponse.success(mapDetail(evaluation, principal.getId())));
+    }
+
+    // ─── Criteria Info Tools (head-only viewer) ────────────────────────────────────────
+
+    @lombok.Data
+    public static class InfoOptionResponse {
+        private String key;
+        private String label;
+    }
+
+    @GetMapping("/{id}/criteria/{criteriaId}/info-tool/options")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<InfoOptionResponse>>> getInfoToolOptions(
+            @PathVariable Long id, @PathVariable Long criteriaId,
+            @RequestParam(required = false) String repositorySourceType,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        AnnualEvaluation evaluation = evaluationService.getById(id, principal.getId());
+        permissionService.assertCanUseCriteriaInfoTool(principal.getId(), evaluation);
+        CriteriaInfoToolAssignment assignment = requireInfoToolAssignment(criteriaId, repositorySourceType);
+        CriteriaInfoTool tool = infoToolRegistry.require(assignment.getToolCode());
+        AppUser employee = evaluation.getEmployee();
+        List<InfoOptionResponse> options = tool.listAvailableOptions(assignment, employee.getFname(), employee.getLname(), employee.getEmail())
+                .stream().map(o -> {
+                    InfoOptionResponse resp = new InfoOptionResponse();
+                    resp.setKey(o.key());
+                    resp.setLabel(o.label());
+                    return resp;
+                }).toList();
+        return ResponseEntity.ok(ApiResponse.success(options));
+    }
+
+    @GetMapping("/{id}/criteria/{criteriaId}/info-tool/details")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<String>> getInfoToolDetails(
+            @PathVariable Long id, @PathVariable Long criteriaId, @RequestParam List<String> terms,
+            @RequestParam(required = false) String repositorySourceType,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        AnnualEvaluation evaluation = evaluationService.getById(id, principal.getId());
+        permissionService.assertCanUseCriteriaInfoTool(principal.getId(), evaluation);
+        CriteriaInfoToolAssignment assignment = requireInfoToolAssignment(criteriaId, repositorySourceType);
+        CriteriaInfoTool tool = infoToolRegistry.require(assignment.getToolCode());
+        AppUser employee = evaluation.getEmployee();
+        String details = tool.getDetails(assignment, employee.getFname(), employee.getLname(), employee.getEmail(), terms);
+        return ResponseEntity.ok(ApiResponse.success(details));
+    }
+
+    // A criterion can carry more than one info tool assignment (e.g. both an Early-Alert-flavored
+    // and a Grade-Distribution-flavored Central Repository Viewer), so repositorySourceType
+    // disambiguates which one this request is for.
+    private CriteriaInfoToolAssignment requireInfoToolAssignment(Long criteriaId, String repositorySourceType) {
+        return infoToolAssignmentRepository.findByCriteriaId(criteriaId).stream()
+                .filter(a -> java.util.Objects.equals(a.getRepositorySourceType(), repositorySourceType))
+                .findFirst()
+                .orElseThrow(() -> new com.rit.spms.exception.BusinessRuleException("No info tool is assigned to this criteria"));
     }
 
     @PutMapping("/{id}/entries/{entryId}/designation")
@@ -266,6 +335,28 @@ public class AnnualEvaluationController {
         return ResponseEntity.ok(ApiResponse.success("Next cycle goal removed", null));
     }
 
+    // Rating Assistant word selections -- see RatingAssistantSelectionService. Strictly private to
+    // this evaluation's own head; the service itself enforces this regardless of who calls it.
+    @GetMapping("/{id}/rating-assistant-selection")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<RatingAssistantSelectionResponse>> getRatingAssistantSelection(
+            @PathVariable Long id, @RequestParam String targetType, @RequestParam Long targetId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        List<String> history = ratingAssistantSelectionService.getSelectionHistory(id, targetType, targetId, principal.getId());
+        RatingAssistantSelectionResponse resp = new RatingAssistantSelectionResponse();
+        resp.setSelectionHistory(history);
+        return ResponseEntity.ok(ApiResponse.success(resp));
+    }
+
+    @PutMapping("/{id}/rating-assistant-selection")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> saveRatingAssistantSelection(
+            @PathVariable Long id, @Valid @RequestBody SaveRatingAssistantSelectionRequest req,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        ratingAssistantSelectionService.saveSelectionHistory(id, req.getTargetType(), req.getTargetId(), req.getSelectionHistory(), principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Selection saved", null));
+    }
+
     @PutMapping("/{id}/overall-rank")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Void>> updateOverallRank(
@@ -274,20 +365,57 @@ public class AnnualEvaluationController {
         return ResponseEntity.ok(ApiResponse.success("Overall rank updated", null));
     }
 
-    @PostMapping("/{id}/submit-head")
+    @PostMapping("/{id}/submit-and-sign-head")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<AnnualEvaluationResponse>> submitHead(
-            @PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
-        AnnualEvaluation evaluation = evaluationService.submitHeadEvaluation(id, principal.getId());
-        return ResponseEntity.ok(ApiResponse.success("Head evaluation submitted", mapDetail(evaluation, principal.getId())));
+    public ResponseEntity<ApiResponse<AnnualEvaluationResponse>> submitAndSignHead(
+            @PathVariable Long id, @Valid @RequestBody SignRequest req, @AuthenticationPrincipal UserPrincipal principal) {
+        AnnualEvaluation evaluation = evaluationService.submitAndSignHeadEvaluation(id, req.getSignatureName(), principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Evaluation signed and submitted", mapDetail(evaluation, principal.getId())));
     }
 
-    @PostMapping("/{id}/sign-head")
+    /** Sends the evaluation back to the employee for one more round of edits/comments -- see {@link AnnualEvaluationService#returnToEmployeeForReview}. */
+    @PostMapping("/{id}/return-to-employee")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<AnnualEvaluationResponse>> signHead(
-            @PathVariable Long id, @Valid @RequestBody SignRequest req, @AuthenticationPrincipal UserPrincipal principal) {
-        AnnualEvaluation evaluation = evaluationService.signAsHead(id, req.getSignatureName(), principal.getId());
-        return ResponseEntity.ok(ApiResponse.success("Signed", mapDetail(evaluation, principal.getId())));
+    public ResponseEntity<ApiResponse<AnnualEvaluationResponse>> returnToEmployee(
+            @PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        AnnualEvaluation evaluation = evaluationService.returnToEmployeeForReview(id, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Returned to employee for review and update", mapDetail(evaluation, principal.getId())));
+    }
+
+    @PutMapping("/{id}/categories/{categoryId}/employee-comments")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> updateCategoryEmployeeComments(
+            @PathVariable Long id, @PathVariable Long categoryId,
+            @RequestBody EmployeeCommentsRequest req, @AuthenticationPrincipal UserPrincipal principal) {
+        evaluationService.updateCategoryEmployeeComments(id, categoryId, req.getComments(), principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Comments saved", null));
+    }
+
+    @PutMapping("/{id}/criteria/{criteriaId}/employee-comments")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> updateCriteriaEmployeeComments(
+            @PathVariable Long id, @PathVariable Long criteriaId,
+            @RequestBody EmployeeCommentsRequest req, @AuthenticationPrincipal UserPrincipal principal) {
+        evaluationService.updateCriteriaEmployeeComments(id, criteriaId, req.getComments(), principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Comments saved", null));
+    }
+
+    // One comment field for the whole Annual Goals section -- parallel to a category's own employee-comments field.
+    @PutMapping("/{id}/goals-employee-comments")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> updateGoalsEmployeeComments(
+            @PathVariable Long id, @RequestBody EmployeeCommentsRequest req, @AuthenticationPrincipal UserPrincipal principal) {
+        evaluationService.updateGoalsEmployeeComments(id, req.getComments(), principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Comments saved", null));
+    }
+
+    // The employee's required whole-evaluation closing statement -- distinct from the per-category/goals reflections.
+    @PutMapping("/{id}/employee-final-summary")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> updateEmployeeFinalSummary(
+            @PathVariable Long id, @RequestBody EmployeeCommentsRequest req, @AuthenticationPrincipal UserPrincipal principal) {
+        evaluationService.updateEmployeeFinalSummary(id, req.getComments(), principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Comments saved", null));
     }
 
     @PostMapping("/{id}/sign-employee")
@@ -321,9 +449,26 @@ public class AnnualEvaluationController {
     }
 
     @lombok.Data
+    public static class SaveRatingAssistantSelectionRequest {
+        @NotBlank private String targetType;
+        @NotNull private Long targetId;
+        private List<String> selectionHistory;
+    }
+
+    @lombok.Data
+    public static class RatingAssistantSelectionResponse {
+        private List<String> selectionHistory;
+    }
+
+    @lombok.Data
     public static class CommentsRequest {
         private String strengths;
         private String improvements;
+    }
+
+    @lombok.Data
+    public static class EmployeeCommentsRequest {
+        private String comments;
     }
 
     @lombok.Data
@@ -400,6 +545,11 @@ public class AnnualEvaluationController {
         private Long employeeId;
         private String employeeName;
         private String departmentName;
+        // What to call the head/supervisor for this employee's department -- their department's
+        // own configured title, falling back to its org group's, or null if neither is set (the
+        // frontend applies the org-wide default label in that case). Not necessarily this specific
+        // evaluation's rater -- just a display label.
+        private String headTitle;
         private Long headId;
         private String headName;
         private Long academicYearId;
@@ -407,6 +557,7 @@ public class AnnualEvaluationController {
         private String state;
         private Integer headOverallRank;
         private LocalDateTime employeeSubmittedAt;
+        private LocalDateTime returnedToEmployeeAt;
         private LocalDateTime headSubmittedAt;
         private LocalDateTime headSignedAt;
         private String headSignatureName;
@@ -422,6 +573,8 @@ public class AnnualEvaluationController {
         private List<GoalResultResponse> goalResults;
         private String goalsHeadCommentsStrengths;
         private String goalsHeadCommentsImprovements;
+        private String goalsEmployeeComments;
+        private String employeeFinalSummary;
         private Integer goalsEmployeeSelfRank;
         private Integer goalsHeadRank;
         private List<EntryResponse> entries;
@@ -436,10 +589,12 @@ public class AnnualEvaluationController {
     public static class CategoryResultResponse {
         private Long categoryId;
         private String categoryName;
+        private Integer sortOrder;
         private Integer employeeSelfRank;
         private Integer headCategoryRank;
         private String headCommentsStrengths;
         private String headCommentsImprovements;
+        private String employeeComments;
     }
 
     @lombok.Data
@@ -449,9 +604,35 @@ public class AnnualEvaluationController {
         private Long categoryId;
         private Integer headRank;
         private Boolean employeeNothingToReport;
+        private String employeeComments;
         private String rubricUnsatisfactory;
         private String rubricMeetsExpectations;
         private String rubricExceedsExpectations;
+        private List<String> achievementModuleCodes;
+        // moduleCode -> the admin-configured max achievements per academic year for that module on
+        // this criterion -- lets the employee's page disable a module's launch button once they've
+        // hit it (the count itself comes from filtering `entries` by criteriaId+createdByModuleCode).
+        private java.util.Map<String, Integer> achievementModuleMaxPerYear;
+        // moduleCode -> whether at least one achievement from that module is required for this
+        // criterion before the employee can submit (see AnnualEvaluationService.submitEmployeeSelfAssessment).
+        private java.util.Map<String, Boolean> achievementModuleMandatory;
+        // moduleCode -> admin-set override for the button label, only present when one has actually
+        // been set -- absence means "use the module's own hardcoded buttonLabel" (today's behavior).
+        private java.util.Map<String, String> achievementModuleDisplayNames;
+        // Head-only viewer tool(s) assigned here -- a criterion can carry more than one (e.g. both
+        // an Early-Alert-flavored and a Grade-Distribution-flavored Central Repository Viewer).
+        // Returned to every viewer including the employee (harmless metadata, a tool name) -- the
+        // actual data is never included in this response regardless of viewer, since
+        // PermissionService.assertCanUseCriteriaInfoTool gates that behind a dedicated endpoint
+        // that explicitly excludes the evaluation's own employee.
+        private List<InfoToolAssignmentSummary> infoToolAssignments;
+    }
+
+    @lombok.Data
+    public static class InfoToolAssignmentSummary {
+        private String toolCode;
+        private String displayName;
+        private String repositorySourceType;
     }
 
     @lombok.Data
@@ -470,12 +651,41 @@ public class AnnualEvaluationController {
         private Long entryId;
         private Long achievementId;
         private String achievementTitle;
+        // Shown on hover in the Annual Evaluation display, same as the Strategy Tree's achievement
+        // cards -- and everything else here (type, period, author, canEdit/canDelete) needed to
+        // support editing/deleting the achievement directly from this page, not just the Strategy
+        // Tree -- achievements generated by a criterion-assigned achievement tool (e.g. Teaching
+        // Evaluations) have no measurement/Initiative at all, so this page is the ONLY place they
+        // can ever be edited.
+        private String achievementDetails;
+        private Long achievementTypeId;
+        private String achievementTypeName;
+        private String customTypeName;
+        private String privateNotes;
+        private Long authorId;
+        private String authorName;
+        private Long assessmentPeriodId;
+        private String assessmentPeriodName;
+        private java.time.LocalDateTime recordedAt;
+        private boolean canEdit;
+        private boolean canDelete;
         private Long categoryId;
         private Long criteriaId;
         private Long goalId;
+        // Non-null when an achievement-recording tool (e.g. Teaching Evaluations) created this
+        // entry -- its category/criteria are fixed and the frontend disables reassigning them.
+        private String createdByModuleCode;
     }
 
     // ─── Mapping ────────────────────────────────────────────────────────────────────────
+
+    /** The department's own configured Head Title, falling back to its org group's -- null if
+     *  neither is set, in which case the frontend shows the org-wide default label instead. */
+    private String resolveHeadTitle(com.rit.spms.domain.Department department) {
+        if (department == null) return null;
+        if (department.getHeadTitle() != null) return department.getHeadTitle();
+        return department.getOrgGroup() != null ? department.getOrgGroup().getHeadTitle() : null;
+    }
 
     private AnnualEvaluationResponse mapSummary(AnnualEvaluation e) {
         AnnualEvaluationResponse resp = new AnnualEvaluationResponse();
@@ -483,6 +693,7 @@ public class AnnualEvaluationController {
         resp.setEmployeeId(e.getEmployee().getId());
         resp.setEmployeeName(e.getEmployee().getFname() + " " + e.getEmployee().getLname());
         resp.setDepartmentName(e.getEmployee().getDepartment() != null ? e.getEmployee().getDepartment().getName() : null);
+        resp.setHeadTitle(resolveHeadTitle(e.getEmployee().getDepartment()));
         resp.setHeadId(e.getHead().getId());
         resp.setHeadName(e.getHead().getFname() + " " + e.getHead().getLname());
         resp.setAcademicYearId(e.getAcademicYear().getId());
@@ -491,9 +702,12 @@ public class AnnualEvaluationController {
         resp.setHeadOverallRank(e.getHeadOverallRank());
         resp.setGoalsHeadCommentsStrengths(e.getGoalsHeadCommentsStrengths());
         resp.setGoalsHeadCommentsImprovements(e.getGoalsHeadCommentsImprovements());
+        resp.setGoalsEmployeeComments(e.getGoalsEmployeeComments());
+        resp.setEmployeeFinalSummary(e.getEmployeeFinalSummary());
         resp.setGoalsEmployeeSelfRank(e.getGoalsEmployeeSelfRank());
         resp.setGoalsHeadRank(e.getGoalsHeadRank());
         resp.setEmployeeSubmittedAt(e.getEmployeeSubmittedAt());
+        resp.setReturnedToEmployeeAt(e.getReturnedToEmployeeAt());
         resp.setHeadSubmittedAt(e.getHeadSubmittedAt());
         resp.setHeadSignedAt(e.getHeadSignedAt());
         resp.setHeadSignatureName(e.getHeadSignatureName());
@@ -521,10 +735,12 @@ public class AnnualEvaluationController {
             CategoryResultResponse c = new CategoryResultResponse();
             c.setCategoryId(r.getCategory().getId());
             c.setCategoryName(r.getCategory().getCategoryName());
+            c.setSortOrder(r.getCategory().getSortOrder());
             c.setEmployeeSelfRank(r.getEmployeeSelfRank());
             c.setHeadCategoryRank(r.getHeadCategoryRank());
             c.setHeadCommentsStrengths(r.getHeadCommentsStrengths());
             c.setHeadCommentsImprovements(r.getHeadCommentsImprovements());
+            c.setEmployeeComments(r.getEmployeeComments());
             return c;
         }).toList());
         resp.setCriteriaResults(evaluationService.getCriteriaResults(e.getId()).stream().map(r -> {
@@ -534,9 +750,26 @@ public class AnnualEvaluationController {
             c.setCategoryId(r.getCriteria().getCategory().getId());
             c.setHeadRank(r.getHeadRank());
             c.setEmployeeNothingToReport(r.getEmployeeNothingToReport());
+            c.setEmployeeComments(r.getEmployeeComments());
             c.setRubricUnsatisfactory(r.getCriteria().getRubricUnsatisfactory());
             c.setRubricMeetsExpectations(r.getCriteria().getRubricMeetsExpectations());
             c.setRubricExceedsExpectations(r.getCriteria().getRubricExceedsExpectations());
+            List<CriteriaAchievementModule> moduleAssignments = achievementModuleRepository.findByCriteriaId(r.getCriteria().getId());
+            c.setAchievementModuleCodes(moduleAssignments.stream().map(CriteriaAchievementModule::getModuleCode).toList());
+            c.setAchievementModuleMaxPerYear(moduleAssignments.stream()
+                    .collect(java.util.stream.Collectors.toMap(CriteriaAchievementModule::getModuleCode, CriteriaAchievementModule::getMaxAchievementsPerYear)));
+            c.setAchievementModuleMandatory(moduleAssignments.stream()
+                    .collect(java.util.stream.Collectors.toMap(CriteriaAchievementModule::getModuleCode, CriteriaAchievementModule::getMandatory)));
+            c.setAchievementModuleDisplayNames(moduleAssignments.stream()
+                    .filter(m -> m.getDisplayName() != null)
+                    .collect(java.util.stream.Collectors.toMap(CriteriaAchievementModule::getModuleCode, CriteriaAchievementModule::getDisplayName)));
+            c.setInfoToolAssignments(infoToolAssignmentRepository.findByCriteriaId(r.getCriteria().getId()).stream().map(a -> {
+                InfoToolAssignmentSummary summary = new InfoToolAssignmentSummary();
+                summary.setToolCode(a.getToolCode());
+                summary.setDisplayName(a.getDisplayName());
+                summary.setRepositorySourceType(a.getRepositorySourceType());
+                return summary;
+            }).toList());
             return c;
         }).toList());
         resp.setGoalResults(evaluationService.getGoalResults(e.getId()).stream().map(r -> {
@@ -553,8 +786,21 @@ public class AnnualEvaluationController {
         resp.setEntries(evaluationService.getEntriesInPeriod(e.getId(), currentUserId).stream().map(entry -> {
             EntryResponse r = new EntryResponse();
             r.setEntryId(entry.getId());
-            r.setAchievementId(entry.getAchievement().getId());
-            r.setAchievementTitle(entry.getAchievement().getTitle());
+            var achResp = achievementService.toResponse(entry.getAchievement(), currentUserId);
+            r.setAchievementId(achResp.getId());
+            r.setAchievementTitle(achResp.getTitle());
+            r.setAchievementDetails(achResp.getDetails());
+            r.setAchievementTypeId(achResp.getAchievementTypeId());
+            r.setAchievementTypeName(achResp.getAchievementTypeName());
+            r.setCustomTypeName(achResp.getCustomTypeName());
+            r.setPrivateNotes(achResp.getPrivateNotes());
+            r.setAuthorId(achResp.getAuthorId());
+            r.setAuthorName(achResp.getAuthorName());
+            r.setAssessmentPeriodId(achResp.getAssessmentPeriodId());
+            r.setAssessmentPeriodName(achResp.getAssessmentPeriodName());
+            r.setRecordedAt(achResp.getRecordedAt());
+            r.setCanEdit(achResp.isCanEdit());
+            r.setCanDelete(achResp.isCanDelete());
             r.setCategoryId(entry.getCategory().getId());
             if (entry.getCriteria() != null) {
                 r.setCriteriaId(entry.getCriteria().getId());
@@ -562,6 +808,7 @@ public class AnnualEvaluationController {
             if (entry.getGoal() != null) {
                 r.setGoalId(entry.getGoal().getId());
             }
+            r.setCreatedByModuleCode(entry.getAchievement().getCreatedByModuleCode());
             return r;
         }).toList());
 

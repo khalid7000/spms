@@ -160,6 +160,26 @@ public class PermissionService {
     }
 
     /**
+     * Only HR/Admin or anyone above the employee in the reporting hierarchy (Faculty -> Chair ->
+     * Dean -> Provost) may use a Criteria Info Tool -- deliberately narrower than {@link
+     * #assertCanViewEvaluationReport}: the whole point of these tools is reference info for the
+     * EVALUATOR, so unlike that method, the employee themselves is never allowed here, even for
+     * their own evaluation. This is the actual security boundary for that data; the frontend simply
+     * not rendering the button is not sufficient on its own.
+     */
+    public void assertCanUseCriteriaInfoTool(Long currentUserId, AnnualEvaluation evaluation) {
+        AppUser currentUser = appUserRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
+        if (currentUser.hasRole(SystemRole.ADMIN) || currentUser.hasRole(SystemRole.HR)) {
+            return;
+        }
+        if (isAboveInHierarchy(currentUser, evaluation.getEmployee())) {
+            return;
+        }
+        throw new UnauthorizedException("Only HR, an admin, or someone above this employee in the reporting hierarchy can use this tool");
+    }
+
+    /**
      * Every department the user heads directly, plus every department under any org group they
      * head (recursively through sub-groups) -- shared by Organization Evaluations' hierarchy
      * rollup and by the "is this console redundant with Team Evaluations" check (redundant exactly

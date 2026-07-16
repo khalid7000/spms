@@ -5,8 +5,12 @@ import com.opencsv.bean.CsvToBean;
 import com.opencsv.bean.CsvToBeanBuilder;
 import com.rit.spms.domain.AppUser;
 import com.rit.spms.domain.Department;
+import com.rit.spms.domain.OrgGroup;
+import com.rit.spms.domain.enums.SystemRole;
 import com.rit.spms.repository.AppUserRepository;
 import com.rit.spms.repository.DepartmentRepository;
+import com.rit.spms.repository.EmployeeTitleRepository;
+import com.rit.spms.repository.OrgGroupRepository;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
@@ -32,9 +36,12 @@ public class CsvImportService {
 
     private final AppUserRepository appUserRepository;
     private final DepartmentRepository departmentRepository;
+    private final OrgGroupRepository orgGroupRepository;
+    private final EmployeeTitleRepository employeeTitleRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public CsvImportResult importUsers(MultipartFile file) {
+    public CsvImportResult importUsers(MultipartFile file, Long currentUserId) {
+        boolean restrictToKnownTitles = currentUserId != null && !callerIsFullAdmin(currentUserId);
         List<UserCsvRow> rows;
         try (Reader reader = new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8)) {
             CsvToBean<UserCsvRow> csvToBean = new CsvToBeanBuilder<UserCsvRow>(reader)
@@ -51,6 +58,13 @@ public class CsvImportService {
         Map<String, Department> deptByCode = allDepts.stream()
                 .collect(Collectors.toMap(
                         d -> d.getCode().toLowerCase().trim(),
+                        Function.identity(),
+                        (a, b) -> a));
+
+        List<OrgGroup> allGroups = orgGroupRepository.findAll();
+        Map<String, OrgGroup> groupByTitle = allGroups.stream()
+                .collect(Collectors.toMap(
+                        g -> g.getTitle().toLowerCase().trim(),
                         Function.identity(),
                         (a, b) -> a));
 
@@ -82,6 +96,34 @@ public class CsvImportService {
                 }
             }
 
+            OrgGroup group = null;
+            if (!isBlank(row.getOrgGroup())) {
+                group = groupByTitle.get(row.getOrgGroup().toLowerCase().trim());
+                if (group == null) {
+                    errors.add(new CsvImportResult.RowError(lineNum,
+                            "Org group not found: " + row.getOrgGroup()));
+                    continue;
+                }
+            }
+
+            // Every user must belong to a department, an org group, or both -- see
+            // AdminService.createUser/updateUser for the same rule on the manual create/edit path.
+            if (dept == null && group == null) {
+                errors.add(new CsvImportResult.RowError(lineNum,
+                        "Row must specify either a department or an org group"));
+                continue;
+            }
+
+            // A User Admin can add/edit users but must not be able to introduce a brand-new title
+            // string through a CSV import any more than through the manual form -- see
+            // AdminService.assertKnownTitleIfUserAdmin for the same rule on the manual create/edit path.
+            if (restrictToKnownTitles && !isBlank(row.getTitle())
+                    && employeeTitleRepository.findByTitleNameIgnoreCase(row.getTitle().trim()).isEmpty()) {
+                errors.add(new CsvImportResult.RowError(lineNum,
+                        "Unknown title '" + row.getTitle() + "' -- User Admins can only assign an existing title"));
+                continue;
+            }
+
             String email = row.getEmail().trim().toLowerCase();
             AppUser existing = appUserRepository.findByEmail(email).orElse(null);
 
@@ -90,6 +132,7 @@ public class CsvImportService {
                 existing.setLname(row.getLname().trim());
                 existing.setTitle(row.getTitle());
                 existing.setDepartment(dept);
+                existing.setOrgGroup(group);
                 appUserRepository.save(existing);
                 updated++;
             } else {
@@ -99,6 +142,7 @@ public class CsvImportService {
                         .email(email)
                         .title(row.getTitle())
                         .department(dept)
+                        .orgGroup(group)
                         .active(true)
                         .passwordHash(defaultHash)
                         .build();
@@ -112,6 +156,12 @@ public class CsvImportService {
 
     private boolean isBlank(String s) {
         return s == null || s.isBlank();
+    }
+
+    private boolean callerIsFullAdmin(Long currentUserId) {
+        return appUserRepository.findById(currentUserId)
+                .map(u -> u.hasRole(SystemRole.ADMIN))
+                .orElse(false);
     }
 
     @Data
@@ -131,6 +181,9 @@ public class CsvImportService {
 
         @CsvBindByName(column = "title", required = false)
         private String title;
+
+        @CsvBindByName(column = "orgGroup", required = false)
+        private String orgGroup;
     }
 
     public record CsvImportResult(int imported, int updated, List<RowError> errors) {

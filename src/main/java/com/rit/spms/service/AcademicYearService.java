@@ -29,6 +29,7 @@ public class AcademicYearService {
     private final AcademicYearRepository academicYearRepository;
     private final StrategyRepository strategyRepository;
     private final InitiativeRepository initiativeRepository;
+    private final InitiativeMappingRepository initiativeMappingRepository;
     private final MeasurementRepository measurementRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final AppUserRepository appUserRepository;
@@ -92,6 +93,17 @@ public class AcademicYearService {
                     .academicYear(year)
                     .sourceInitiative(base)
                     .build());
+
+            // The base initiative's university-initiative mapping must carry forward to its
+            // year-specific copy -- otherwise the mapping (required for every department
+            // initiative, enforced at creation time) silently disappears the instant a specific
+            // academic year is selected in the Strategy Tree, even though the base plan still
+            // shows it correctly.
+            initiativeMappingRepository.findByDeptInitiativeId(base.getId()).ifPresent(baseMapping ->
+                    initiativeMappingRepository.save(InitiativeMapping.builder()
+                            .deptInitiative(copy)
+                            .universityInitiative(baseMapping.getUniversityInitiative())
+                            .build()));
 
             for (Measurement bm : measurementRepository.findByInitiativeIdOrderBySortOrder(base.getId())) {
                 measurementRepository.save(Measurement.builder()

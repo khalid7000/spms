@@ -50,12 +50,26 @@ public class NotificationService {
     }
 
     public void markRead(Long notificationId, Long currentUserId) {
+        setRead(notificationId, currentUserId, true);
+    }
+
+    /** Lets the user undo an accidental (or premature) mark-as-read -- e.g. from the bell panel's per-row toggle. */
+    public void markUnread(Long notificationId, Long currentUserId) {
+        setRead(notificationId, currentUserId, false);
+    }
+
+    private void setRead(Long notificationId, Long currentUserId, boolean read) {
         Notification notification = notificationRepository.findById(notificationId)
                 .orElseThrow(() -> new com.rit.spms.exception.ResourceNotFoundException("Notification", notificationId));
         if (!notification.getRecipient().getId().equals(currentUserId)) {
-            throw new com.rit.spms.exception.UnauthorizedException("You can only mark your own notifications as read");
+            throw new com.rit.spms.exception.UnauthorizedException("You can only change the read status of your own notifications");
         }
-        notification.setIsRead(true);
+        notification.setIsRead(read);
         notificationRepository.save(notification);
+    }
+
+    /** Bulk-marks every currently-unread notification for this user -- a single UPDATE rather than loading and saving each row individually. */
+    public void markAllRead(Long userId) {
+        notificationRepository.markAllReadForUser(userId);
     }
 }

@@ -21,4 +21,9 @@ public class AchievementType {
 
     @Column(nullable = false)
     private Boolean active = true;
+
+    /** Stable identifier for the "Other" and "Course Evaluation" rows other code branches on --
+     *  never settable through the achievement-type admin API, only ever assigned by migration. */
+    @Column(name = "system_code", unique = true, length = 50)
+    private String systemCode;
 }

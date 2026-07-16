@@ -37,4 +37,8 @@ public class AnnualEvaluationCategoryResult {
 
     @Column(name = "head_comments_improvements", columnDefinition = "TEXT")
     private String headCommentsImprovements;
+
+    /** The employee's own reflection on this category -- editable in DRAFT and RETURNED_TO_EMPLOYEE, shown before the head's comments. */
+    @Column(name = "employee_comments", columnDefinition = "TEXT")
+    private String employeeComments;
 }

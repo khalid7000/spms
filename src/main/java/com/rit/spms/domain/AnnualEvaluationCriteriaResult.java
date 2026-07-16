@@ -32,4 +32,8 @@ public class AnnualEvaluationCriteriaResult {
     @Column(name = "employee_nothing_to_report", nullable = false)
     @Builder.Default
     private Boolean employeeNothingToReport = false;
+
+    /** The employee's own optional reflection on this criteria -- editable in DRAFT and RETURNED_TO_EMPLOYEE. */
+    @Column(name = "employee_comments", columnDefinition = "TEXT")
+    private String employeeComments;
 }

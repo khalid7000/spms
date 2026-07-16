@@ -22,5 +22,7 @@ public class DashboardResponse {
     private int goalsOnTrack;
     private int totalObjectives;
     private int objectivesOnTrack;
+    private int totalInitiatives;
+    private int initiativesOnTrack;
     private String mostRecentPeriodName;
 }

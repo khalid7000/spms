@@ -2,6 +2,7 @@ package com.rit.spms.dto.response;
 
 import com.rit.spms.domain.AppUser;
 import com.rit.spms.domain.Department;
+import com.rit.spms.domain.OrgGroup;
 import com.rit.spms.domain.enums.SystemRole;
 import lombok.Builder;
 import lombok.Value;
@@ -20,6 +21,7 @@ public class UserResponse {
     String email;
     String title;
     DeptInfo department;
+    OrgGroupInfo orgGroup;
     Set<SystemRole> systemRoles;
     Boolean active;
     Boolean mustChangePassword;
@@ -27,6 +29,7 @@ public class UserResponse {
 
     public static UserResponse from(AppUser user) {
         Department dept = user.getDepartment();
+        OrgGroup group = user.getOrgGroup();
         return UserResponse.builder()
                 .id(user.getId())
                 .fname(user.getFname())
@@ -34,6 +37,7 @@ public class UserResponse {
                 .email(user.getEmail())
                 .title(user.getTitle())
                 .department(dept == null ? null : new DeptInfo(dept.getId(), dept.getName(), dept.getCode()))
+                .orgGroup(group == null ? null : new OrgGroupInfo(group.getId(), group.getTitle()))
                 .systemRoles(user.getSystemRoles())
                 .active(user.getActive())
                 .mustChangePassword(user.getMustChangePassword())
@@ -42,4 +46,6 @@ public class UserResponse {
     }
 
     public record DeptInfo(Long id, String name, String code) {}
+
+    public record OrgGroupInfo(Long id, String title) {}
 }

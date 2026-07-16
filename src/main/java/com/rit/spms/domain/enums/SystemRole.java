@@ -7,5 +7,9 @@ package com.rit.spms.domain.enums;
  */
 public enum SystemRole {
     ADMIN,
-    HR
+    HR,
+    /** Limited admin: user management only (create/edit users, department assignment, CSV import)
+     *  -- cannot reach any other admin console feature and cannot grant ADMIN/HR/USER_ADMIN to
+     *  anyone (see AdminService.createUser/updateUser). Only a true ADMIN can grant this role. */
+    USER_ADMIN
 }

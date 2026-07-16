@@ -12,6 +12,8 @@ import com.rit.spms.service.AchievementService;
 import com.rit.spms.service.AdminService;
 import com.rit.spms.service.AnnualEvaluationService;
 import com.rit.spms.service.CsvImportService;
+import com.rit.spms.service.RepositoryImportService;
+import com.rit.spms.service.RepositoryReaderRegistry;
 import com.rit.spms.service.StrategyService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -43,10 +45,14 @@ public class AdminController {
     private final StrategyService strategyService;
     private final AchievementService achievementService;
     private final AnnualEvaluationService annualEvaluationService;
+    private final RepositoryReaderRegistry repositoryReaderRegistry;
+    private final RepositoryImportService repositoryImportService;
+    private final com.rit.spms.repository.RepositoryRecordRepository repositoryRecordRepository;
 
     // --- Org Groups ---
 
     @GetMapping("/org-groups")
+    @PreAuthorize("hasAnyRole('ADMIN','USER_ADMIN')")
     public ResponseEntity<ApiResponse<List<OrgGroupResponse>>> getOrgGroups() {
         return ResponseEntity.ok(ApiResponse.success(
                 adminService.getAllOrgGroups().stream().map(OrgGroupResponse::from).toList()));
@@ -77,6 +83,7 @@ public class AdminController {
     // --- Departments ---
 
     @GetMapping("/departments")
+    @PreAuthorize("hasAnyRole('ADMIN','USER_ADMIN')")
     public ResponseEntity<ApiResponse<List<DepartmentResponse>>> getDepartments() {
         return ResponseEntity.ok(ApiResponse.success(
                 adminService.getAllDepartments().stream().map(DepartmentResponse::from).toList()));
@@ -112,33 +119,79 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success("Department activated", null));
     }
 
-    // --- Users ---
+    // --- Users --- (also reachable by USER_ADMIN, a limited role that can manage users but nothing
+    // else in this console -- see AdminService.createUser/updateUser for the server-side guard
+    // preventing a USER_ADMIN from granting ADMIN/HR/USER_ADMIN to anyone)
 
     @GetMapping("/users")
+    @PreAuthorize("hasAnyRole('ADMIN','USER_ADMIN')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getUsers() {
         return ResponseEntity.ok(ApiResponse.success(adminService.getAllUsers()));
     }
 
     @PostMapping("/users")
-    public ResponseEntity<ApiResponse<UserResponse>> createUser(@Valid @RequestBody CreateUserRequest req) {
+    @PreAuthorize("hasAnyRole('ADMIN','USER_ADMIN')")
+    public ResponseEntity<ApiResponse<UserResponse>> createUser(
+            @Valid @RequestBody CreateUserRequest req, @AuthenticationPrincipal UserPrincipal principal) {
         UserResponse user = adminService.createUser(req.getFname(), req.getLname(), req.getEmail(),
-                req.getTitle(), req.getDepartmentId(), req.getSystemRoles(), req.getPassword());
+                req.getTitle(), req.getDepartmentId(), req.getOrgGroupId(), req.getSystemRoles(),
+                req.getPassword(), principal.getId());
         return ResponseEntity.status(201).body(ApiResponse.success("User created", user));
     }
 
     @PutMapping("/users/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','USER_ADMIN')")
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(@PathVariable Long id,
-                                                                 @Valid @RequestBody UpdateUserRequest req) {
+            @Valid @RequestBody UpdateUserRequest req, @AuthenticationPrincipal UserPrincipal principal) {
         UserResponse user = adminService.updateUser(id, req.getFname(), req.getLname(),
-                req.getTitle(), req.getDepartmentId(), req.getSystemRoles());
+                req.getTitle(), req.getDepartmentId(), req.getOrgGroupId(), req.getSystemRoles(),
+                principal.getId());
         return ResponseEntity.ok(ApiResponse.success(user));
     }
 
     @PostMapping("/users/import")
+    @PreAuthorize("hasAnyRole('ADMIN','USER_ADMIN')")
     public ResponseEntity<ApiResponse<CsvImportService.CsvImportResult>> importUsers(
-            @RequestParam("file") MultipartFile file) {
-        CsvImportService.CsvImportResult result = csvImportService.importUsers(file);
+            @RequestParam("file") MultipartFile file, @AuthenticationPrincipal UserPrincipal principal) {
+        CsvImportService.CsvImportResult result = csvImportService.importUsers(file, principal.getId());
         return ResponseEntity.ok(ApiResponse.success("CSV import completed", result));
+    }
+
+    // --- Data Repository (readers feed the central name-value repository Criteria Info Tools read from) ---
+
+    @GetMapping("/repository-readers")
+    public ResponseEntity<ApiResponse<List<RepositoryReaderResponse>>> listRepositoryReaders() {
+        List<RepositoryReaderResponse> readers = repositoryReaderRegistry.listAll().stream().map(r -> {
+            RepositoryReaderResponse resp = new RepositoryReaderResponse();
+            resp.setCode(r.getCode());
+            resp.setDisplayName(r.getDisplayName());
+            resp.setDescription(r.getDescription());
+            return resp;
+        }).toList();
+        return ResponseEntity.ok(ApiResponse.success(readers));
+    }
+
+    @PostMapping("/repository-readers/{code}/import")
+    public ResponseEntity<ApiResponse<RepositoryImportService.ImportResult>> runRepositoryImport(
+            @PathVariable String code, @RequestParam("file") MultipartFile file,
+            @RequestParam java.util.Map<String, String> params) throws java.io.IOException {
+        // Every non-"file" form field is a reader-specific param (e.g. year/term for EarlyAlert) --
+        // Spring binds them all into this map since readers don't share a fixed param shape.
+        RepositoryImportService.ImportResult result = repositoryImportService.runImport(code, file, params);
+        return ResponseEntity.ok(ApiResponse.success("Import completed", result));
+    }
+
+    @GetMapping("/repository-records/summary")
+    public ResponseEntity<ApiResponse<List<RepositoryRecordSummaryResponse>>> getRepositoryRecordsSummary() {
+        List<RepositoryRecordSummaryResponse> summary = repositoryRecordRepository.summarize().stream().map(row -> {
+            RepositoryRecordSummaryResponse resp = new RepositoryRecordSummaryResponse();
+            resp.setSourceType((String) row[0]);
+            resp.setSecondaryKey((String) row[1]);
+            resp.setSecondaryKeyLabel((String) row[2]);
+            resp.setRecordCount(((Number) row[3]).longValue());
+            return resp;
+        }).toList();
+        return ResponseEntity.ok(ApiResponse.success(summary));
     }
 
     // --- Planning Cycles ---
@@ -404,6 +457,7 @@ public class AdminController {
         @NotBlank private String email;
         private String title;
         private Long departmentId;
+        private Long orgGroupId;
         private Set<SystemRole> systemRoles;
         private String password;
     }
@@ -413,6 +467,7 @@ public class AdminController {
         private String lname;
         private String title;
         private Long departmentId;
+        private Long orgGroupId;
         private Set<SystemRole> systemRoles;
     }
 
@@ -448,6 +503,19 @@ public class AdminController {
 
     @Data public static class AdminStateRequest {
         @NotNull private StrategyState state;
+    }
+
+    @Data public static class RepositoryReaderResponse {
+        private String code;
+        private String displayName;
+        private String description;
+    }
+
+    @Data public static class RepositoryRecordSummaryResponse {
+        private String sourceType;
+        private String secondaryKey;
+        private String secondaryKeyLabel;
+        private long recordCount;
     }
 
     @Data public static class UniversityStrategyRequest {

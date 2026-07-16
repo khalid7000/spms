@@ -39,6 +39,17 @@ app:
     ollama:
       base-url: http://localhost:11434
       model: llama3.1
+      # Context window sent with every Ollama request (options.num_ctx) -- Ollama otherwise falls
+      # back to a small model default (often 2048-4096 tokens) and silently truncates anything
+      # beyond it. Raise this further if a prompt-heavy generator (e.g. Teaching Evaluations
+      # drafting from a large PDF) still seems to be missing content from later in its input.
+      num-ctx: 16384
+      # HTTP timeouts for the call to Ollama. Generation already runs fully in the background (the
+      # employee can close the page and come back later), so the read timeout is intentionally very
+      # generous -- raise it further (e.g. to 720 for 12 hours) if a real run still times out before
+      # a slow local/CPU-only model finishes.
+      connect-timeout-seconds: 10
+      read-timeout-minutes: 360
 
 server:
   port: 8085
