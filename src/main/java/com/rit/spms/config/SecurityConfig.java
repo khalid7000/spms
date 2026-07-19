@@ -1,5 +1,6 @@
 package com.rit.spms.config;
 
+import com.rit.spms.platform.tenant.TenantResolutionFilter;
 import com.rit.spms.security.HybridAuthenticationProvider;
 import com.rit.spms.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final HybridAuthenticationProvider hybridAuthenticationProvider;
+    private final TenantResolutionFilter tenantResolutionFilter;
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
@@ -60,7 +62,8 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .authenticationProvider(hybridAuthenticationProvider)
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(tenantResolutionFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

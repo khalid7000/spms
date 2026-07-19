@@ -293,6 +293,48 @@ public class StrategyService {
         return assignment;
     }
 
+    /**
+     * Atomically swaps the strategy's Owner: the current Owner (must be the caller) is demoted to
+     * Editor, and `newOwnerUserId` -- who must already be an existing member (shown in the Members
+     * tab; this is not a way to add a brand-new person) -- is promoted to Owner. Both writes happen
+     * in the same transaction as everything else in this @Transactional service class, so there's
+     * never a moment with zero Owners (revokeRole/changeState both rely on that invariant already
+     * holding).
+     */
+    public void transferOwnership(Long strategyId, Long newOwnerUserId, Long currentUserId) {
+        permissionService.assertOwner(currentUserId, strategyId);
+        if (currentUserId.equals(newOwnerUserId)) {
+            throw new BusinessRuleException("You are already the Owner of this strategy");
+        }
+
+        Strategy strategy = strategyRepository.findById(strategyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Strategy", strategyId));
+        AppUser currentUser = appUserRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
+
+        RoleAssignment oldOwnerAssignment = roleAssignmentRepository.findByStrategyIdAndRole(strategyId, RoleType.OWNER)
+                .orElseThrow(() -> new BusinessRuleException("This strategy has no current Owner"));
+        RoleAssignment newOwnerAssignment = roleAssignmentRepository.findByUserIdAndStrategyId(newOwnerUserId, strategyId)
+                .orElseThrow(() -> new BusinessRuleException(
+                        "The selected user must already be a member of this strategy before they can become its Owner"));
+
+        String newOwnerPreviousRole = newOwnerAssignment.getRole().name();
+
+        oldOwnerAssignment.setRole(RoleType.EDITOR);
+        newOwnerAssignment.setRole(RoleType.OWNER);
+        roleAssignmentRepository.save(oldOwnerAssignment);
+        roleAssignmentRepository.save(newOwnerAssignment);
+
+        auditService.log(currentUser, "TRANSFER_OWNERSHIP", "RoleAssignment", oldOwnerAssignment.getId(), strategy,
+                "OWNER", "EDITOR",
+                "Transferred ownership to " + newOwnerAssignment.getUser().getEmail() + " -- demoted to Editor");
+        auditService.log(currentUser, "TRANSFER_OWNERSHIP", "RoleAssignment", newOwnerAssignment.getId(), strategy,
+                newOwnerPreviousRole, "OWNER",
+                "Received ownership transfer from " + currentUser.getEmail());
+
+        notifyMemberAdded(strategy, newOwnerAssignment.getUser(), RoleType.OWNER, currentUserId);
+    }
+
     /** Skips self-notification (a user changing their own role, e.g. via the admin console). */
     private void notifyMemberAdded(Strategy strategy, AppUser targetUser, RoleType role, Long currentUserId) {
         if (!targetUser.getId().equals(currentUserId)) {

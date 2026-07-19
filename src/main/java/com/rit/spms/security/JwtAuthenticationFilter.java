@@ -1,5 +1,6 @@
 package com.rit.spms.security;
 
+import com.rit.spms.platform.tenant.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,6 +32,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String jwt = getJwtFromRequest(request);
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
+                // Tenant must be resolved from the signed claim -- never from the URL --
+                // before the user lookup below, so that lookup hits the right schema.
+                String org = tokenProvider.getOrgFromToken(jwt);
+                if (StringUtils.hasText(org)) {
+                    TenantContext.setTenant(org);
+                }
                 String email = tokenProvider.getEmailFromToken(jwt);
                 UserDetails userDetails = userDetailsService.loadUserByUsername(email);
                 UsernamePasswordAuthenticationToken authentication =
@@ -41,7 +48,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } catch (Exception ex) {
             log.error("Could not set user authentication in security context", ex);
         }
-        filterChain.doFilter(request, response);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            // Tomcat reuses request-handling threads -- must clear even on the
+            // unauthenticated/permitAll path, or one request's tenant leaks into the next.
+            TenantContext.clear();
+        }
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {

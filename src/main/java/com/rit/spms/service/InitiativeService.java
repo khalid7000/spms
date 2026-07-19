@@ -4,6 +4,7 @@ import com.rit.spms.domain.*;
 import com.rit.spms.domain.enums.StrategyState;
 import com.rit.spms.domain.enums.StrategyType;
 import com.rit.spms.dto.request.CreateInitiativeRequest;
+import com.rit.spms.dto.request.SuggestMeasurementRequest;
 import com.rit.spms.dto.response.InitiativeResponse;
 import com.rit.spms.dto.response.MeasurementResponse;
 import com.rit.spms.exception.BusinessRuleException;
@@ -32,6 +33,22 @@ public class InitiativeService {
     private final AssessmentPeriodRepository assessmentPeriodRepository;
     private final PermissionService permissionService;
     private final AuditService auditService;
+    private final MeasurementSuggestionGenerator measurementSuggestionGenerator;
+
+    public MeasurementSuggestionGenerator.SuggestedMeasurementDto suggestMeasurement(
+            Long objectiveId, SuggestMeasurementRequest req, Long currentUserId) {
+        Objective objective = objectiveRepository.findById(objectiveId)
+                .orElseThrow(() -> new ResourceNotFoundException("Objective", objectiveId));
+
+        Long strategyId = objective.getGoal().getStrategy().getId();
+        if (!permissionService.canAddInitiative(currentUserId, strategyId)) {
+            throw new UnauthorizedException("Cannot add initiatives in the current strategy state");
+        }
+
+        return measurementSuggestionGenerator.suggestMeasurement(
+                objective.getTitle(), objective.getDescription(),
+                req.getInitiativeTitle(), req.getInitiativeDescription());
+    }
 
     public Initiative createInitiative(Long objectiveId, CreateInitiativeRequest req, Long currentUserId) {
         Objective objective = objectiveRepository.findById(objectiveId)
@@ -104,6 +121,27 @@ public class InitiativeService {
 
         auditService.log(creator, "CREATE_INITIATIVE", "Initiative", initiative.getId(), strategy,
                 "Created initiative: " + initiative.getTitle());
+
+        // Optional measurement created in this same transaction -- both rows or neither, rather
+        // than the caller making two separate requests that could leave the initiative with no
+        // measurement if the second one failed (the exact gap that blocked achievements on 19
+        // 2022-2027 initiatives; see V83__fix_missing_2022_2027_measurements.sql). Built inline
+        // rather than via MeasurementService.createMeasurement, which would re-check permissions
+        // against a different rule (assertCanEditContent) than the one already enforced above.
+        if (req.getMeasurement() != null) {
+            Measurement measurement = Measurement.builder()
+                    .initiative(initiative)
+                    .description(req.getMeasurement().getDescription())
+                    .unit(req.getMeasurement().getUnit())
+                    .targetValue(req.getMeasurement().getTargetValue())
+                    .actualValue(req.getMeasurement().getActualValue())
+                    .sortOrder(req.getMeasurement().getSortOrder() != null ? req.getMeasurement().getSortOrder() : 0)
+                    .build();
+            measurement = measurementRepository.save(measurement);
+            auditService.log(creator, "CREATE_MEASUREMENT", "Measurement", measurement.getId(), strategy,
+                    "Created measurement: " + measurement.getDescription());
+        }
+
         return initiative;
     }
 

@@ -17,6 +17,12 @@ public class AiProperties {
 
     private final Ollama ollama = new Ollama();
 
+    // Provider-agnostic: whether/how often AiEngineHealthCheckService polls whichever
+    // AiEngineHealthChecker implementation is active for `provider` above (see that interface).
+    // Each provider's own checker owns its own connection details/timeout separately (e.g.
+    // Ollama's healthCheckTimeoutSeconds below) -- this block only controls the orchestration.
+    private final HealthCheck healthCheck = new HealthCheck();
+
     @Getter
     @Setter
     public static class Ollama {
@@ -38,5 +44,24 @@ public class AiProperties {
         // 6 hours; raise it further here if a real run still times out before finishing.
         private int connectTimeoutSeconds = 10;
         private int readTimeoutMinutes = 360;
+
+        // Deliberately separate from the generation timeout above -- OllamaEngineHealthChecker
+        // needs to fail fast on a periodic poll, not wait up to 6 hours like a real generation
+        // call would.
+        private int healthCheckTimeoutSeconds = 5;
+
+        // Also deliberately separate: MeasurementSuggestionGenerator's call is made
+        // synchronously while a user waits in the Add Initiative modal (unlike every other
+        // Ollama-backed generator in this codebase, which runs in the background), so it needs
+        // to fail within a UI-reasonable window rather than wait hours like a real long-form
+        // generation call is allowed to.
+        private int measurementSuggestionTimeoutSeconds = 30;
+    }
+
+    @Getter
+    @Setter
+    public static class HealthCheck {
+        private boolean enabled = true;
+        private int intervalMs = 300_000; // 5 minutes
     }
 }

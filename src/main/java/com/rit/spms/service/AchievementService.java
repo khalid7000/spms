@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -65,16 +66,30 @@ public class AchievementService {
     /**
      * Once the author's Annual Evaluation for this achievement's academic year has been submitted
      * to the department chair for review (or moved further along), the achievement it's tagged
-     * against must be frozen in the Strategy Tree -- otherwise the employee could keep changing
-     * the evidence behind a rating the chair has already started reviewing.
+     * against must be frozen -- otherwise the employee could keep changing the evidence behind a
+     * rating the chair has already started reviewing, or add brand-new achievements to a cycle
+     * that's already been submitted or concluded. Package-private (not private): also called from
+     * {@link PortfolioEntryService} to gate its own achievement-to-portfolio linking methods, which
+     * don't otherwise touch anything achievement-state-related.
      */
-    private boolean isSubmittedForReview(Achievement a) {
+    boolean isSubmittedForReview(Achievement a) {
         AcademicYear ay = resolveAcademicYear(a);
         if (ay == null) return false;
         return annualEvaluationRepository.findByEmployeeIdAndAcademicYearId(a.getAuthor().getId(), ay.getId())
                 .map(e -> e.getState() != AnnualEvaluationState.DRAFT
                         && e.getState() != AnnualEvaluationState.RETURNED_TO_EMPLOYEE)
                 .orElse(false);
+    }
+
+    /** Resolves the Annual Evaluation this achievement counts toward (by author + academic year),
+     *  if one exists yet. Read-only -- unlike {@code AnnualEvaluationService.getOrCreateForEmployeeAndYear},
+     *  never creates one as a side effect. Used by {@link PortfolioEntryService} to decide whether a
+     *  newly-logged achievement was added while the evaluation is {@code RETURNED_TO_EMPLOYEE}, which
+     *  should notify the head. */
+    public Optional<AnnualEvaluation> findEvaluation(Achievement a) {
+        AcademicYear ay = resolveAcademicYear(a);
+        if (ay == null) return Optional.empty();
+        return annualEvaluationRepository.findByEmployeeIdAndAcademicYearId(a.getAuthor().getId(), ay.getId());
     }
 
     public Achievement recordAchievement(Long measurementId, CreateAchievementRequest req, Long currentUserId) {
@@ -125,6 +140,20 @@ public class AchievementService {
                 .author(author)
                 .assessmentPeriod(period)
                 .build();
+
+        // Gate on the unsaved instance -- isSubmittedForReview/resolveAcademicYear only read
+        // measurement/assessmentPeriod, never id, so this works fine before the row exists. Blocks
+        // adding a brand-new achievement once the author's evaluation for this cycle has been
+        // submitted or concluded, mirroring the same check updateAchievement/deleteAchievement
+        // already apply to editing/deleting an existing one.
+        if (isSubmittedForReview(achievement)) {
+            AcademicYear ay = resolveAcademicYear(achievement);
+            throw new BusinessRuleException("Your annual evaluation for "
+                    + (ay != null ? ay.getName() : "this period")
+                    + " has already been submitted or concluded -- new achievements can no longer be "
+                    + "added for that cycle. Achievements for the next cycle can be added once it opens.");
+        }
+
         achievement = achievementRepository.save(achievement);
 
         auditService.log(author, "RECORD_ACHIEVEMENT", "Achievement", achievement.getId(), strategy,

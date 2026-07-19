@@ -18,5 +18,9 @@ public enum NotificationType {
     /** entityId = EmployeeGoalCycle id -- recipient is the employee, route to their own goals */
     GOAL_CYCLE,
     /** entityId = EmployeeGoalCycle id -- recipient is the leader/head, route to Team Goals */
-    GOAL_CYCLE_HEAD
+    GOAL_CYCLE_HEAD,
+    /** entityId = null -- system-level alert (AiEngineHealthCheckService), not tied to any
+     *  business entity; the frontend has no click-routing case for it and that's fine, it just
+     *  marks read like any other notification. Message text distinguishes down vs. recovered. */
+    AI_ENGINE_DOWN
 }

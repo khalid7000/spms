@@ -1,5 +1,6 @@
 package com.rit.spms.security;
 
+import com.rit.spms.platform.tenant.TenantContext;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -10,7 +11,13 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.util.Date;
 
-/** Issues/validates JWTs. Only carries userId + email as claims -- authorization is re-derived from the DB per request (see JwtAuthenticationFilter), not trusted from the token. */
+/** Issues/validates JWTs. Carries userId + email (authorization is re-derived from the DB
+ * per request, not trusted from the token -- see JwtAuthenticationFilter) plus a signed
+ * "org" claim capturing whichever schema {@link TenantContext} resolved to at login time.
+ * That claim is what a request's schema gets resolved from later -- never a URL segment --
+ * so a token minted for one org can't be pointed at another org's schema by editing the
+ * address bar. Today, with no organization ever setting a non-default tenant before login,
+ * every token simply carries the default schema, unchanged from pre-multi-tenancy behavior. */
 @Component
 @Slf4j
 public class JwtTokenProvider {
@@ -34,6 +41,7 @@ public class JwtTokenProvider {
         return Jwts.builder()
                 .subject(userPrincipal.getEmail())
                 .claim("userId", userPrincipal.getId())
+                .claim("org", TenantContext.getTenant())
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(getSigningKey())
@@ -47,6 +55,15 @@ public class JwtTokenProvider {
                 .parseSignedClaims(token)
                 .getPayload()
                 .getSubject();
+    }
+
+    public String getOrgFromToken(String token) {
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("org", String.class);
     }
 
     public boolean validateToken(String token) {

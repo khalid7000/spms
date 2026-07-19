@@ -73,6 +73,16 @@ public class AnnualEvaluationEventTrigger {
         }
     }
 
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAchievementAddedWhileReturned(AnnualEvaluationAchievementAddedEvent event) {
+        AnnualEvaluation evaluation = require(event.evaluationId());
+        notificationService.create(evaluation.getHead(),
+                evaluation.getEmployee().getFname() + " " + evaluation.getEmployee().getLname()
+                        + " added a new achievement (\"" + event.achievementTitle()
+                        + "\") to their returned annual evaluation.",
+                NotificationType.ANNUAL_EVALUATION_HEAD, evaluation.getId());
+    }
+
     private AnnualEvaluation require(Long evaluationId) {
         return evaluationRepository.findById(evaluationId)
                 .orElseThrow(() -> new com.rit.spms.exception.ResourceNotFoundException("AnnualEvaluation", evaluationId));

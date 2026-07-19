@@ -14,12 +14,32 @@ spring:
         format_sql: false
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # This app's default/pre-multi-tenancy schema *is* RIT's actual data (soon to be renamed
+    # to org_rit per the multi-tenancy plan), so it needs both the generic tenant baseline and
+    # RIT's real seed content. A brand-new org provisioned later only ever gets db/migration --
+    # see OrganizationProvisioningService/TenantMigrationRunner, which deliberately omit
+    # db/migration-rit-seed unless an org's own extra_content_locations says otherwise.
+    locations: classpath:db/migration,classpath:db/migration-rit-seed
 
 app:
   jwt:
     secret: your-256-bit-secret-key-change-in-production-please-32chars
     expiration-ms: 86400000
+  # Super Admin platform layer -- see PlatformJwtTokenProvider's javadoc for why this has its
+  # own, separate secret from app.jwt above rather than reusing it.
+  platform:
+    jwt:
+      secret: another-256-bit-secret-key-change-in-production-please-32c
+      expiration-ms: 86400000
+    # First-run only: seeds one Super Admin if platform_admin is empty. Change the password
+    # immediately after first login -- these are dev-friendly defaults, not meant for prod.
+    bootstrap-admin-email: superadmin@strtalign.com
+    bootstrap-admin-password: changeme
+  # Local filesystem path new organizations' uploaded logos are stored under (served back out
+  # via /uploads/** -- see UploadsWebMvcConfig). Move to object storage later without changing
+  # the Organization.logoPath shape, just what it resolves to.
+  uploads:
+    dir: ./uploads
   # SWOT collaborative workflow: ranked-choice voting weights and word-count
   # gates for the SWOT-to-draft-strategy module. Tune here rather than in code.
   swot:
@@ -36,6 +56,15 @@ app:
   # "claude": requires ANTHROPIC_API_KEY in the process environment.
   ai:
     provider: ollama
+    # AiEngineHealthCheckService: periodic probe of whichever AiEngineHealthChecker implementation
+    # is active for the provider above, notifying every ADMIN when it stops responding (and again
+    # when it recovers) -- see AiEngineHealthChecker's Javadoc for why only Ollama has a checker
+    # today. Provider-agnostic; each provider's own checker owns its own connection timeout
+    # separately (e.g. ollama.health-check-timeout-seconds below). Set enabled: false to turn the
+    # whole check off regardless of provider.
+    health-check:
+      enabled: true
+      interval-ms: 300000 # 5 minutes
     ollama:
       base-url: http://localhost:11434
       model: llama3.1
@@ -50,6 +79,10 @@ app:
       # a slow local/CPU-only model finishes.
       connect-timeout-seconds: 10
       read-timeout-minutes: 360
+      # Separate, much shorter timeout used only by OllamaEngineHealthChecker's periodic probe
+      # (GET /api/tags, not a real generation call) -- a health check must fail fast, not wait
+      # hours like a real generation call is allowed to.
+      health-check-timeout-seconds: 5
 
 server:
   port: 8085

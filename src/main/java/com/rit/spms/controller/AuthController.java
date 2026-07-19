@@ -4,6 +4,7 @@ import com.rit.spms.config.LdapProperties;
 import com.rit.spms.domain.AppUser;
 import com.rit.spms.dto.response.ApiResponse;
 import com.rit.spms.exception.BusinessRuleException;
+import com.rit.spms.exception.ResourceNotFoundException;
 import com.rit.spms.repository.AppUserRepository;
 import com.rit.spms.security.JwtTokenProvider;
 import com.rit.spms.security.UserPrincipal;
@@ -14,9 +15,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -40,6 +42,7 @@ public class AuthController {
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final LdapProperties ldapProperties;
+    private final JdbcTemplate jdbcTemplate;
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> login(@Valid @RequestBody LoginRequest request) {
@@ -55,8 +58,37 @@ public class AuthController {
         data.put("email", principal.getEmail());
         data.put("systemRoles", principal.getSystemRoles());
         data.put("mustChangePassword", principal.getMustChangePassword());
+        // Lets the frontend hide/guard self-service password change when LDAP owns the
+        // password -- see ChangePasswordPage.jsx and MemberLayout.jsx's user menu.
+        data.put("ldapEnabled", ldapProperties.isEnabled());
 
         return ResponseEntity.ok(ApiResponse.success("Login successful", data));
+    }
+
+    /** Login for any organization other than the default/root one. The actual schema
+     * resolution happens earlier, in {@code TenantResolutionFilter} (registered ahead of
+     * {@code JwtAuthenticationFilter} in {@code SecurityConfig}) -- it has to run before
+     * Spring's Open-Session-In-View filter opens this request's one shared Hibernate session,
+     * which fixes its tenant identifier once, at creation, before any controller code runs.
+     * Setting TenantContext here would be too late (verified against a real run: the
+     * authentication query still landed on the default schema). This method only re-validates
+     * the org exists/is active for a clean 404/409 rather than a confusing auth failure, then
+     * delegates to the identical authenticate+token flow above. */
+    @PostMapping("/{slug}/login")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> loginToOrganization(
+            @PathVariable String slug, @Valid @RequestBody LoginRequest request) {
+        Map<String, Object> row;
+        try {
+            row = jdbcTemplate.queryForMap(
+                    "SELECT status FROM platform.organization WHERE slug = ?", slug);
+        } catch (EmptyResultDataAccessException e) {
+            throw new ResourceNotFoundException("Organization not found: " + slug);
+        }
+        if (!"ACTIVE".equals(row.get("status"))) {
+            throw new BusinessRuleException("This organization is not currently active.");
+        }
+
+        return login(request);
     }
 
     @PatchMapping("/change-password")
@@ -74,7 +106,9 @@ public class AuthController {
                 .orElseThrow(() -> new BusinessRuleException("User not found"));
 
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
-            throw new BadCredentialsException("Current password is incorrect");
+            // Not an auth failure (the user already holds a valid bearer token) -- a 401 here
+            // would trip axios's global interceptor and force-log-out the user for a typo.
+            throw new BusinessRuleException("Current password is incorrect");
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
@@ -91,6 +125,7 @@ public class AuthController {
         data.put("email", updated.getEmail());
         data.put("systemRoles", updated.getSystemRoles());
         data.put("mustChangePassword", updated.getMustChangePassword());
+        data.put("ldapEnabled", ldapProperties.isEnabled());
 
         return ResponseEntity.ok(ApiResponse.success("Password changed successfully", data));
     }

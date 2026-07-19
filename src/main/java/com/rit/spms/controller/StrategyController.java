@@ -6,6 +6,7 @@ import com.rit.spms.dto.request.ChangeStateRequest;
 import com.rit.spms.dto.request.CreateStrategyRequest;
 import com.rit.spms.dto.request.RoleAssignmentRequest;
 import com.rit.spms.dto.request.SetThresholdRequest;
+import com.rit.spms.dto.request.TransferOwnershipRequest;
 import com.rit.spms.dto.response.ApiResponse;
 import com.rit.spms.dto.response.AuditLogResponse;
 import com.rit.spms.dto.response.RoleAssignmentResponse;
@@ -142,6 +143,15 @@ public class StrategyController {
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success("Member updated",
                 strategyService.assignMemberRole(id, req, principal.getId())));
+    }
+
+    @PostMapping("/{id}/members/transfer-ownership")
+    public ResponseEntity<ApiResponse<Void>> transferOwnership(
+            @PathVariable Long id,
+            @Valid @RequestBody TransferOwnershipRequest req,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        strategyService.transferOwnership(id, req.getNewOwnerUserId(), principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Ownership transferred", null));
     }
 
     @DeleteMapping("/{id}/members/{userId}")

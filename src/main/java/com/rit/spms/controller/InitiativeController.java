@@ -2,10 +2,12 @@ package com.rit.spms.controller;
 
 import com.rit.spms.domain.Initiative;
 import com.rit.spms.dto.request.CreateInitiativeRequest;
+import com.rit.spms.dto.request.SuggestMeasurementRequest;
 import com.rit.spms.dto.response.ApiResponse;
 import com.rit.spms.dto.response.InitiativeResponse;
 import com.rit.spms.security.UserPrincipal;
 import com.rit.spms.service.InitiativeService;
+import com.rit.spms.service.MeasurementSuggestionGenerator.SuggestedMeasurementDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +29,16 @@ public class InitiativeController {
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 initiativeService.getInitiatives(objectiveId, academicYearId, principal.getId())));
+    }
+
+    @PostMapping("/api/objectives/{objectiveId}/initiatives/suggest-measurement")
+    public ResponseEntity<ApiResponse<SuggestedMeasurementDto>> suggestMeasurement(
+            @PathVariable Long objectiveId,
+            @Valid @RequestBody SuggestMeasurementRequest req,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        SuggestedMeasurementDto suggestion =
+                initiativeService.suggestMeasurement(objectiveId, req, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success(suggestion));
     }
 
     @PostMapping("/api/objectives/{objectiveId}/initiatives")

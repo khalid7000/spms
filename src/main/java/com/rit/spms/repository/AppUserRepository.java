@@ -1,6 +1,7 @@
 package com.rit.spms.repository;
 
 import com.rit.spms.domain.AppUser;
+import com.rit.spms.domain.enums.SystemRole;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -26,4 +27,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     @Query("SELECT DISTINCT u.title FROM AppUser u WHERE u.title IS NOT NULL AND u.active = true")
     List<String> findDistinctActiveUserTitles();
+
+    @Query("SELECT DISTINCT u FROM AppUser u JOIN u.systemRoles r WHERE r = :role AND u.active = true")
+    List<AppUser> findByActiveTrueAndSystemRolesContaining(@Param("role") SystemRole role);
 }
