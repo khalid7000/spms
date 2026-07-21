@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/spms
-    username: spms_user
-    password: spms_pass
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/spms}
+    username: ${DB_USERNAME:spms_user}
+    password: ${DB_PASSWORD:spms_pass}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -18,28 +18,30 @@ spring:
     # to org_rit per the multi-tenancy plan), so it needs both the generic tenant baseline and
     # RIT's real seed content. A brand-new org provisioned later only ever gets db/migration --
     # see OrganizationProvisioningService/TenantMigrationRunner, which deliberately omit
-    # db/migration-rit-seed unless an org's own extra_content_locations says otherwise.
-    locations: classpath:db/migration,classpath:db/migration-rit-seed
+    # db/migration-rit-seed unless an org's own extra_content_locations says otherwise. Other
+    # deployments of this same codebase (e.g. the public trial environment) override this to
+    # just "classpath:db/migration" so their default schema doesn't carry RIT-specific content.
+    locations: ${FLYWAY_LOCATIONS:classpath:db/migration,classpath:db/migration-rit-seed}
 
 app:
   jwt:
-    secret: your-256-bit-secret-key-change-in-production-please-32chars
+    secret: ${JWT_SECRET:your-256-bit-secret-key-change-in-production-please-32chars}
     expiration-ms: 86400000
   # Super Admin platform layer -- see PlatformJwtTokenProvider's javadoc for why this has its
   # own, separate secret from app.jwt above rather than reusing it.
   platform:
     jwt:
-      secret: another-256-bit-secret-key-change-in-production-please-32c
+      secret: ${PLATFORM_JWT_SECRET:another-256-bit-secret-key-change-in-production-please-32c}
       expiration-ms: 86400000
     # First-run only: seeds one Super Admin if platform_admin is empty. Change the password
     # immediately after first login -- these are dev-friendly defaults, not meant for prod.
-    bootstrap-admin-email: superadmin@strtalign.com
-    bootstrap-admin-password: changeme
+    bootstrap-admin-email: ${BOOTSTRAP_ADMIN_EMAIL:superadmin@strtalign.com}
+    bootstrap-admin-password: ${BOOTSTRAP_ADMIN_PASSWORD:changeme}
   # Local filesystem path new organizations' uploaded logos are stored under (served back out
   # via /uploads/** -- see UploadsWebMvcConfig). Move to object storage later without changing
   # the Organization.logoPath shape, just what it resolves to.
   uploads:
-    dir: ./uploads
+    dir: ${UPLOADS_DIR:./uploads}
   # SWOT collaborative workflow: ranked-choice voting weights and word-count
   # gates for the SWOT-to-draft-strategy module. Tune here rather than in code.
   swot:
@@ -86,6 +88,7 @@ app:
 
 server:
   port: 8085
+  address: ${SERVER_ADDRESS:0.0.0.0}
 
 springdoc:
   api-docs:

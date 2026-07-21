@@ -4,6 +4,7 @@ import com.rit.spms.platform.tenant.TenantResolutionFilter;
 import com.rit.spms.security.HybridAuthenticationProvider;
 import com.rit.spms.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -19,6 +20,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -31,6 +33,14 @@ public class SecurityConfig {
     private final HybridAuthenticationProvider hybridAuthenticationProvider;
     private final TenantResolutionFilter tenantResolutionFilter;
 
+    // Dev defaults only -- each deployment (RIT, the public trial site, etc.) overrides this
+    // via the ALLOWED_ORIGINS env var (comma-separated) to include its own real domain(s).
+    // Browsers send an Origin header on POST/PUT/PATCH/DELETE even when the request is same-origin
+    // from Caddy's point of view, so Spring's CorsFilter rejects it as "Invalid CORS request"
+    // unless the exact origin is listed here.
+    @Value("${ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}")
+    private String allowedOrigins;
+
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
@@ -39,7 +49,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*"));
+        config.setAllowedOriginPatterns(Arrays.stream(allowedOrigins.split(",")).map(String::trim).toList());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

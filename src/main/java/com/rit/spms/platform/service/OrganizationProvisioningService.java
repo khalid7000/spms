@@ -1,6 +1,7 @@
 package com.rit.spms.platform.service;
 
 import com.rit.spms.exception.BusinessRuleException;
+import com.rit.spms.exception.ResourceNotFoundException;
 import com.rit.spms.platform.domain.Organization;
 import com.rit.spms.platform.domain.enums.AuthMode;
 import com.rit.spms.platform.domain.enums.OrgStatus;
@@ -167,6 +168,30 @@ public class OrganizationProvisioningService {
                 .authMode(AuthMode.LOCAL)
                 .build();
 
+        return organizationRepository.save(organization);
+    }
+
+    /**
+     * Renames an org's public-facing slug (its login URL / routing identifier) without
+     * touching {@code schemaName} -- the two are deliberately decoupled: the schema was
+     * fixed forever at provisioning time (renaming a live Postgres schema is a separate,
+     * riskier operation this doesn't attempt), while the slug is just a lookup key
+     * {@code TenantResolutionFilter} and the frontend's {@code /:slug/login} route read
+     * fresh from the registry on every request. Already-issued JWTs carry the schema name,
+     * not the slug, so existing sessions are unaffected -- only login links change, and
+     * anyone using the old slug's URL will need the new one.
+     */
+    @Transactional
+    public Organization renameSlug(Long orgId, String newSlug) {
+        Organization organization = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new ResourceNotFoundException("Organization not found: " + orgId));
+
+        slugValidator.validateFormat(newSlug);
+        if (!newSlug.equals(organization.getSlug()) && organizationRepository.existsBySlug(newSlug)) {
+            throw new BusinessRuleException("An organization with slug '" + newSlug + "' already exists.");
+        }
+
+        organization.setSlug(newSlug);
         return organizationRepository.save(organization);
     }
 
