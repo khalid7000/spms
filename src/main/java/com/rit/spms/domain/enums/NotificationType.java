@@ -22,5 +22,36 @@ public enum NotificationType {
     /** entityId = null -- system-level alert (AiEngineHealthCheckService), not tied to any
      *  business entity; the frontend has no click-routing case for it and that's fine, it just
      *  marks read like any other notification. Message text distinguishes down vs. recovered. */
-    AI_ENGINE_DOWN
+    AI_ENGINE_DOWN,
+    /** entityId = null -- system-level alert (GatewaySsoAuthenticationFilter): a gateway-SSO
+     *  authenticated user (identity already verified by the third-party gateway) has no
+     *  corresponding AppUser in this deployment. Message text carries the identity/details an
+     *  Admin needs to decide whether to provision the account. */
+    GATEWAY_SSO_UNPROVISIONED,
+    /** entityId = ImprovementTask id -- recipient is the VSM map's author, someone pulled a task
+     *  off their board */
+    VSM_TASK_PULLED,
+    /** entityId = ImprovementTask id -- recipient is the VSM map's author, a pulled task was
+     *  marked done */
+    VSM_TASK_COMPLETED,
+    /** entityId = VsmAuthorGrant id -- recipient is the top-of-hierarchy required approver */
+    VSM_AUTHOR_GRANT_APPROVAL,
+    /** entityId = VsmAuthorGrant id -- recipient is the delegated employee, message carries the
+     *  approve/reject outcome */
+    VSM_AUTHOR_GRANT_DECIDED,
+    /** entityId = ApprovalDelegation id -- recipient is the delegator's own manager, whose sign-off
+     *  is required because the delegate is neither an ancestor head nor a direct report */
+    APPROVAL_DELEGATION_MANAGER_APPROVAL,
+    /** entityId = ApprovalDelegation id -- recipient is the delegator, message carries the
+     *  approve/reject outcome from their manager */
+    APPROVAL_DELEGATION_DECIDED,
+    /** entityId = ApprovalDelegation id -- recipient is the delegate, told that approval authority
+     *  has been handed to them for a date range */
+    APPROVAL_DELEGATION_ACTIVATED,
+    /** entityId = ImprovementTask id -- recipient is the employee who had pulled it, told the map's
+     *  author returned it to the board (now AVAILABLE again) before they completed it */
+    VSM_TASK_RETURNED_TO_BOARD,
+    /** entityId = ImprovementTask id -- recipient is the employee just added as a collaborator on
+     *  someone else's pulled task */
+    VSM_TASK_ASSIGNED
 }

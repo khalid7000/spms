@@ -2,19 +2,26 @@ package com.rit.spms.service;
 
 import com.rit.spms.domain.AnnualEvaluation;
 import com.rit.spms.domain.AppUser;
+import com.rit.spms.domain.ApprovalDelegation;
 import com.rit.spms.domain.Department;
 import com.rit.spms.domain.Strategy;
 import com.rit.spms.domain.SwotParticipant;
 import com.rit.spms.domain.SwotSession;
 import com.rit.spms.domain.OrgGroup;
+import com.rit.spms.domain.VsmAuthorGrant;
+import com.rit.spms.domain.VsmMap;
+import com.rit.spms.domain.enums.ApprovalDelegationStatus;
 import com.rit.spms.domain.enums.RoleType;
 import com.rit.spms.domain.enums.StrategyState;
 import com.rit.spms.domain.enums.SwotPhase;
 import com.rit.spms.domain.enums.SystemRole;
+import com.rit.spms.domain.enums.VsmAuthorGrantStatus;
+import com.rit.spms.domain.enums.VsmScopeType;
 import com.rit.spms.exception.BusinessRuleException;
 import com.rit.spms.exception.ResourceNotFoundException;
 import com.rit.spms.exception.UnauthorizedException;
 import com.rit.spms.repository.AppUserRepository;
+import com.rit.spms.repository.ApprovalDelegationRepository;
 import com.rit.spms.repository.DepartmentRepository;
 import com.rit.spms.repository.OrgGroupRepository;
 import com.rit.spms.repository.RoleAssignmentRepository;
@@ -23,9 +30,11 @@ import com.rit.spms.repository.StrategyRepository;
 import com.rit.spms.repository.SwotParticipantRepository;
 import com.rit.spms.repository.SwotSessionRepository;
 import com.rit.spms.repository.VisionAreaRepository;
+import com.rit.spms.repository.VsmAuthorGrantRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashSet;
@@ -50,6 +59,8 @@ public class PermissionService {
     private final AppUserRepository appUserRepository;
     private final DepartmentRepository departmentRepository;
     private final OrgGroupRepository orgGroupRepository;
+    private final VsmAuthorGrantRepository vsmAuthorGrantRepository;
+    private final ApprovalDelegationRepository approvalDelegationRepository;
 
     // ─── Employee Portfolio & Goals ────────────────────────────────────────
 
@@ -232,6 +243,135 @@ public class PermissionService {
                 .anyMatch(g -> g.getHead() != null && g.getHead().getId().equals(currentUserId));
         if (!isRootHead) {
             throw new UnauthorizedException("Only the head of the top-level Org Group or an admin can create the university strategy");
+        }
+    }
+
+    // ─── Value Stream Mapping (Phase 1) ────────────────────────────────────
+
+    /**
+     * Only that unit's head, an admin, or an employee holding an ACTIVE {@link VsmAuthorGrant} for
+     * this exact scope, may create a VSM map for it -- mirrors {@link
+     * #assertCanCreateDepartmentStrategy}/{@link #assertCanCreateUniversityStrategy} generalized to
+     * any org-group (not just the root).
+     */
+    public void assertCanCreateVsmMap(Long currentUserId, VsmScopeType scopeType, Long scopeId) {
+        AppUser currentUser = appUserRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
+        if (currentUser.hasRole(SystemRole.ADMIN)) {
+            return;
+        }
+        boolean isHead = scopeType == VsmScopeType.DEPARTMENT
+                ? departmentRepository.findByHeadId(currentUserId).stream().anyMatch(d -> d.getId().equals(scopeId))
+                : orgGroupRepository.findByHeadId(currentUserId).stream().anyMatch(g -> g.getId().equals(scopeId));
+        if (isHead) {
+            return;
+        }
+        boolean hasActiveGrant = scopeType == VsmScopeType.DEPARTMENT
+                ? vsmAuthorGrantRepository.existsByEmployeeIdAndScopeTypeAndDepartmentIdAndStatus(
+                        currentUserId, scopeType, scopeId, VsmAuthorGrantStatus.ACTIVE)
+                : vsmAuthorGrantRepository.existsByEmployeeIdAndScopeTypeAndOrgGroupIdAndStatus(
+                        currentUserId, scopeType, scopeId, VsmAuthorGrantStatus.ACTIVE);
+        if (!hasActiveGrant) {
+            throw new UnauthorizedException(
+                    "Only this unit's head, an admin, or someone granted VSM author rights for it can create a Value Stream Map here");
+        }
+    }
+
+    /** Walks up from a department to the root OrgGroup (no parent) -- extracted from {@code
+     *  ApprovalService.buildTopOfHierarchyChain}'s walk so both that flow and VSM author-grant
+     *  approval share one implementation. */
+    public Optional<OrgGroup> resolveTopOfHierarchyGroup(Department department) {
+        return resolveTopOfHierarchyGroup(department != null ? department.getOrgGroup() : null);
+    }
+
+    public Optional<OrgGroup> resolveTopOfHierarchyGroup(OrgGroup startGroup) {
+        OrgGroup group = startGroup;
+        OrgGroup root = null;
+        while (group != null) {
+            root = group;
+            group = group.getParent();
+        }
+        return Optional.ofNullable(root);
+    }
+
+    /** The root OrgGroup's head, if any -- e.g. the Provost. */
+    public Optional<AppUser> resolveTopOfHierarchyHead(Department department) {
+        return resolveTopOfHierarchyGroup(department).map(OrgGroup::getHead);
+    }
+
+    public Optional<AppUser> resolveTopOfHierarchyHead(OrgGroup startGroup) {
+        return resolveTopOfHierarchyGroup(startGroup).map(OrgGroup::getHead);
+    }
+
+    /**
+     * Every nominal-approver resolution in the app (ApprovalService's chains, VSM author-grant
+     * approval) routes through this one method, so an {@link ApprovalDelegation} -- set up through
+     * the Approval Delegation Console -- transparently redirects the approval to the delegate for
+     * as long as it's ACTIVE and {@code onDate} falls within its [startDate, endDate] window. Falls
+     * back to {@code nominalApprover} unchanged when no such delegation exists. Deliberately a
+     * single-hop lookup (does not chase the delegate's own delegations): re-delegation is blocked
+     * structurally anyway, since creating a delegation requires actually being the department/org-
+     * group's recorded head, which a delegate never becomes.
+     */
+    public AppUser resolveEffectiveApprover(AppUser nominalApprover, LocalDate onDate) {
+        return approvalDelegationRepository
+                .findFirstByDelegatorIdAndStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                        nominalApprover.getId(), ApprovalDelegationStatus.ACTIVE, onDate, onDate)
+                .map(ApprovalDelegation::getDelegate)
+                .orElse(nominalApprover);
+    }
+
+    /** Only the map's author, or an admin, may edit its canvas (nodes/edges/metrics) or state. */
+    public void assertCanEditVsmMap(Long currentUserId, VsmMap map) {
+        if (!canEditVsmMap(currentUserId, map)) {
+            throw new UnauthorizedException("Only this map's author or an admin can edit it");
+        }
+    }
+
+    /** Non-throwing form of {@link #assertCanEditVsmMap} -- used where the caller wants to branch
+     *  behavior (e.g. VsmBoardService including BACKLOG tasks) rather than reject the request. */
+    public boolean canEditVsmMap(Long currentUserId, VsmMap map) {
+        AppUser currentUser = appUserRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
+        return currentUser.hasRole(SystemRole.ADMIN) || map.getCreatedBy().getId().equals(currentUserId);
+    }
+
+    /**
+     * Read access: the map's author, an admin, or -- for a department-scoped map -- anyone in that
+     * same department. Org-group-scoped maps are author/admin-only for now; broadening that to
+     * "anyone under this org group's hierarchy" is a later concern once a rollup board needs that
+     * wider audience too.
+     */
+    public void assertCanViewVsmMap(Long currentUserId, VsmMap map) {
+        AppUser currentUser = appUserRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
+        if (currentUser.hasRole(SystemRole.ADMIN) || map.getCreatedBy().getId().equals(currentUserId)) {
+            return;
+        }
+        boolean sameDepartment = map.getScopeType() == VsmScopeType.DEPARTMENT
+                && map.getDepartment() != null
+                && currentUser.getDepartment() != null
+                && currentUser.getDepartment().getId().equals(map.getDepartment().getId());
+        if (!sameDepartment) {
+            throw new UnauthorizedException("You do not have access to this Value Stream Map");
+        }
+    }
+
+    /** Only that department's head, an admin, or anyone whose own department is this one, may view
+     *  its rollup Kanban board (see VsmBoardService#getDepartmentBoard) -- the same audience that
+     *  can browse and pull the improvement tasks it lists. */
+    public void assertCanViewDepartmentBoard(Long currentUserId, Long departmentId) {
+        AppUser currentUser = appUserRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("AppUser", currentUserId));
+        if (currentUser.hasRole(SystemRole.ADMIN)) {
+            return;
+        }
+        boolean isHead = departmentRepository.findByHeadId(currentUserId).stream()
+                .anyMatch(d -> d.getId().equals(departmentId));
+        boolean isMember = currentUser.getDepartment() != null
+                && currentUser.getDepartment().getId().equals(departmentId);
+        if (!isHead && !isMember) {
+            throw new UnauthorizedException("You do not have access to this department's task board");
         }
     }
 

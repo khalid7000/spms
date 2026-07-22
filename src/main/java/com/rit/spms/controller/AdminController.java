@@ -418,8 +418,9 @@ public class AdminController {
 
     @GetMapping("/planning-cycles/{cycleId}/periods/all")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<List<AssessmentPeriod>>> getPeriodsPublic(@PathVariable Long cycleId) {
-        return ResponseEntity.ok(ApiResponse.success(adminService.getPeriodsForCycle(cycleId)));
+    public ResponseEntity<ApiResponse<List<AssessmentPeriodResponse>>> getPeriodsPublic(@PathVariable Long cycleId) {
+        return ResponseEntity.ok(ApiResponse.success(adminService.getPeriodsForCycle(cycleId)
+                .stream().map(AssessmentPeriodResponse::from).toList()));
     }
 
     // --- Audit Logs ---

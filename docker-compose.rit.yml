@@ -1,0 +1,39 @@
+# Reference only -- illustrates how this image is meant to join RIT Dubai's Academic Dashboard
+# platform per their Developer Guide §6.6, NOT a compose file we run ourselves. RIT's own
+# platform compose is the one that actually wires the shared network and edge routing; this
+# file exists so their ops team can see the intended shape at a glance without reading the
+# whole Dockerfile. Replace `platform_net` with whatever their actual shared network is named.
+
+services:
+  strtalign-api:
+    build: .
+    image: strtalign-api:latest
+    restart: unless-stopped
+    # No `ports:` -- reachable only via the shared platform network, at this service name and
+    # container port 8085 (see Dockerfile's EXPOSE). The platform edge (Caddy) is the only
+    # thing that ever talks to it.
+    networks:
+      - platform_net
+    environment:
+      DB_URL: jdbc:postgresql://<platform-postgres-host>:5432/strtalign
+      DB_USERNAME: strtalign_user
+      DB_PASSWORD: <supplied-via-secret-or-vault>
+      JWT_SECRET: <supplied-via-secret-or-vault>
+      PLATFORM_JWT_SECRET: <supplied-via-secret-or-vault>
+      BOOTSTRAP_ADMIN_EMAIL: superadmin@strtalign.com
+      BOOTSTRAP_ADMIN_PASSWORD: <changed-immediately-after-first-login>
+      ALLOWED_ORIGINS: https://ie.ritdubai.ae
+      GATEWAY_SSO_ENABLED: "true"
+      GATEWAY_SSO_JWKS_URI: https://ie.ritdubai.ae/.well-known/jwks.json
+      GATEWAY_SSO_ISSUER: <confirm-with-rit-maintainers>
+      GATEWAY_SSO_INTROSPECT_URI: https://ie.ritdubai.ae/auth/introspect
+      GATEWAY_SSO_CANONICAL_EMAIL_DOMAIN: rit.edu
+    volumes:
+      - strtalign_uploads:/app/uploads
+
+networks:
+  platform_net:
+    external: true
+
+volumes:
+  strtalign_uploads:

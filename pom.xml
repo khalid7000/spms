@@ -41,9 +41,23 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+        <!-- JWKS-based RS256 verification of externally-issued JWTs (e.g. RIT Dubai's Academic
+             Dashboard Gateway SSO), gated by app.gateway-sso.enabled; see GatewaySsoProperties.
+             Independent of and unrelated to JwtTokenProvider's own HS256 tokens below. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <!-- /actuator/health: RIT Dubai's platform-join convention (and our own Docker
+             HEALTHCHECK) both poll this for container readiness; see SecurityConfig's permitAll
+             on it and application.yml's management.endpoints exposure below. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
         <!-- PostgreSQL -->

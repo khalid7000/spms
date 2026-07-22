@@ -13,6 +13,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -27,6 +28,7 @@ public class ApprovalService {
     private final AppUserRepository appUserRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final AcademicYearService academicYearService;
+    private final PermissionService permissionService;
 
     /**
      * Called when an owner requests deployment.
@@ -121,17 +123,24 @@ public class ApprovalService {
         Department dept = owner.getDepartment();
         if (dept == null) return chain;
 
-        if (dept.getHead() != null && seen.add(dept.getHead().getId())) {
-            String label = (dept.getHeadTitle() != null ? dept.getHeadTitle() : "Head")
-                    + ", " + dept.getName();
-            chain.add(buildRecord(strategy, dept.getHead(), label, order++));
+        LocalDate today = LocalDate.now();
+        if (dept.getHead() != null) {
+            AppUser effective = permissionService.resolveEffectiveApprover(dept.getHead(), today);
+            if (seen.add(effective.getId())) {
+                String label = (dept.getHeadTitle() != null ? dept.getHeadTitle() : "Head")
+                        + ", " + dept.getName();
+                chain.add(buildRecord(strategy, effective, label, order++));
+            }
         }
 
         OrgGroup group = dept.getOrgGroup();
         while (group != null) {
-            if (group.getHead() != null && seen.add(group.getHead().getId())) {
-                String label = group.getHeadTitle() + ", " + group.getTitle();
-                chain.add(buildRecord(strategy, group.getHead(), label, order++));
+            if (group.getHead() != null) {
+                AppUser effective = permissionService.resolveEffectiveApprover(group.getHead(), today);
+                if (seen.add(effective.getId())) {
+                    String label = group.getHeadTitle() + ", " + group.getTitle();
+                    chain.add(buildRecord(strategy, effective, label, order++));
+                }
             }
             group = group.getParent();
         }
@@ -152,8 +161,9 @@ public class ApprovalService {
         if (root == null || root.getHead() == null) {
             return new ArrayList<>();
         }
+        AppUser effective = permissionService.resolveEffectiveApprover(root.getHead(), LocalDate.now());
         String label = root.getHeadTitle() + ", " + root.getTitle();
-        return new ArrayList<>(List.of(buildRecord(strategy, root.getHead(), label, 1)));
+        return new ArrayList<>(List.of(buildRecord(strategy, effective, label, 1)));
     }
 
     private StrategyApproval buildRecord(Strategy strategy, AppUser approver,

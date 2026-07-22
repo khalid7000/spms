@@ -1,6 +1,7 @@
 package com.rit.spms.config;
 
 import com.rit.spms.platform.tenant.TenantResolutionFilter;
+import com.rit.spms.security.GatewaySsoAuthenticationFilter;
 import com.rit.spms.security.HybridAuthenticationProvider;
 import com.rit.spms.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final GatewaySsoAuthenticationFilter gatewaySsoAuthenticationFilter;
     private final HybridAuthenticationProvider hybridAuthenticationProvider;
     private final TenantResolutionFilter tenantResolutionFilter;
 
@@ -69,10 +71,18 @@ public class SecurityConfig {
                 .requestMatchers("/v3/api-docs/**").permitAll()
                 .requestMatchers("/swagger-ui/**").permitAll()
                 .requestMatchers("/swagger-ui.html").permitAll()
+                // Container/platform readiness probes only -- management.endpoints.web.exposure
+                // in application.yml limits what's actually mapped under /actuator/** to just
+                // this, so permitting the whole prefix here doesn't leak env/beans/etc.
+                .requestMatchers("/actuator/health").permitAll()
                 .anyRequest().authenticated()
             )
             .authenticationProvider(hybridAuthenticationProvider)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            // A no-op unless gateway-sso.enabled=true (see its own class javadoc) -- registered
+            // alongside, not instead of, jwtAuthenticationFilter; whichever token type a given
+            // request actually carries is the one that ends up setting the SecurityContext.
+            .addFilterBefore(gatewaySsoAuthenticationFilter, JwtAuthenticationFilter.class)
             .addFilterBefore(tenantResolutionFilter, JwtAuthenticationFilter.class);
 
         return http.build();

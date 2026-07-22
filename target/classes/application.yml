@@ -90,6 +90,24 @@ server:
   port: 8085
   address: ${SERVER_ADDRESS:0.0.0.0}
 
+# Only "health" is exposed -- RIT's platform-join readiness probe (and our own Docker
+# HEALTHCHECK) need it reachable without auth (see SecurityConfig's permitAll on
+# /actuator/health), so keep the exposed surface to just that rather than the full actuator
+# default set (env, beans, etc. would otherwise be reachable at the same permitAll rule).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    # Spring Boot auto-configures an LDAP health indicator purely because our LDAP-auth feature
+    # registers an LdapTemplate bean -- it ignores our own ldap.enabled switch and tries a real
+    # connection regardless, which reports the whole app DOWN whenever LDAP isn't actually in
+    # use (the default). Tie it to the same flag so health only reflects LDAP when LDAP is
+    # actually the active auth mode.
+    ldap:
+      enabled: ${ldap.enabled:false}
+
 springdoc:
   api-docs:
     path: /v3/api-docs
@@ -124,6 +142,37 @@ ldap:
   # ── Bind account (required for search-based auth; omit for anonymous bind) ─
   # bind-dn: cn=svc-spms,ou=service-accounts,dc=rit,dc=edu
   # bind-password: changeme
+
+# ─── Gateway SSO (e.g. RIT Dubai's Academic Dashboard) ────────────────────────
+# Set gateway-sso.enabled=true to accept a third-party gateway's RS256 JWT (via
+# cookie or Bearer) as an alternative session, alongside this app's own JWT and
+# the LDAP toggle above -- see GatewaySsoProperties and the module integration
+# contract this implements. Every value below MUST be confirmed with the
+# gateway's maintainers before enabling in a real deployment; the values shown
+# are RIT Dubai's Academic Dashboard docs' own stated examples, not guarantees.
+gateway-sso:
+  enabled: false
+
+  # jwks-uri: https://ie.ritdubai.ae/.well-known/jwks.json
+
+  # Confirm the production value with maintainers -- their own docs show this
+  # only as a local-dev default, not a guaranteed production value.
+  # issuer: academicspring-auth
+
+  # introspect-uri: https://ie.ritdubai.ae/auth/introspect
+
+  # cookie-name: rit_session   # default already matches this; only override if told otherwise
+
+  # 0 (default) calls introspect-uri on every protected request, matching the
+  # gateway's contract default. Only raise this if the gateway's maintainers
+  # have explicitly approved a bounded cache interval for this deployment.
+  # revocation-cache-seconds: 0
+
+  # RIT Dubai's Gateway issues its `email` claim under either "rit.edu" or
+  # "g.rit.edu" for the same person, but every StratAlign AppUser row is always
+  # stored under exactly one -- confirmed rit.edu. Leave blank (default) to use
+  # the JWT's raw `email` claim as-is instead.
+  # canonical-email-domain: rit.edu
 
 # ─── Claude API (Anthropic) ──────────────────────────────────────────────────
 # Only needed if app.ai.provider=claude above. Requires ANTHROPIC_API_KEY to be
